@@ -1,26 +1,77 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/* Guía de estilo (RNF-05, RNF-06): azul y amarillo de la tienda, mismos colores de estado en todas las pantallas. */
+@theme {
+  --color-azul: #0b2fb5;
+  --color-azul-oscuro: #08238a;
+  --color-azul-claro: #e8edfc;
+  --color-amarillo: #ffd100;
+  --color-amarillo-oscuro: #e6bc00;
+  --color-fondo: #edf0f5;
+  --color-panel: #ffffff;
+  --color-borde: #dde2ea;
+  --color-texto: #121826;
+  --color-suave: #5b6475;
+  --color-ok: #17803d;
+  --color-ok-fondo: #e3f4e8;
+  --color-aviso: #b45309;
+  --color-aviso-fondo: #fff1d6;
+  --color-peligro: #c81e1e;
+  --color-peligro-fondo: #fde8e8;
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-titulo: "Segoe UI Variable Display", "Segoe UI", ui-sans-serif, system-ui, -apple-system, Roboto, Arial, sans-serif;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
+html,
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--color-fondo);
+  color: var(--color-texto);
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-titulo);
+  letter-spacing: -0.01em;
+}
+
+/* Campos de formulario comunes */
+@layer components {
+  .campo {
+    @apply w-full rounded-md border border-borde bg-white px-3 py-2.5 text-sm outline-none transition placeholder:text-suave/70 focus:border-azul focus:ring-2 focus:ring-azul/20 disabled:bg-fondo disabled:text-suave;
+  }
+  .etiqueta {
+    @apply mb-1 block text-sm font-semibold;
+  }
+  .ayuda {
+    @apply mt-1 text-xs text-suave;
+  }
+  /* Botones: principal (amarillo), secundario (borde), peligro. Ningún elemento no clicable se ve así (RNF-04). */
+  .btn {
+    @apply inline-flex min-h-11 items-center justify-center gap-2 rounded-md px-4 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50;
+  }
+  .btn-principal {
+    @apply inline-flex min-h-11 items-center justify-center gap-2 rounded-md px-4 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 bg-amarillo text-texto hover:bg-amarillo-oscuro;
+  }
+  .btn-secundario {
+    @apply inline-flex min-h-11 items-center justify-center gap-2 rounded-md px-4 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 border border-borde bg-white text-texto hover:bg-fondo;
+  }
+  .btn-peligro {
+    @apply inline-flex min-h-11 items-center justify-center gap-2 rounded-md px-4 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 border border-peligro/30 bg-white text-peligro hover:bg-peligro-fondo;
+  }
+  .enlace {
+    @apply font-semibold text-azul underline-offset-2 hover:underline;
+  }
+  .panel {
+    @apply rounded-lg border border-borde bg-panel;
+  }
+  .tabla {
+    @apply w-full text-left text-sm;
+  }
+  .tabla th {
+    @apply bg-fondo/70 px-3 py-2 text-xs font-semibold text-suave;
+  }
+  .tabla td {
+    @apply border-t border-borde px-3 py-2.5 align-middle;
+  }
 }
