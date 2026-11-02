@@ -48,6 +48,7 @@ export default function Historial() {
   const [hasta, setHasta] = useState(() => hoyISO());
   const [pestana, setPestana] = useState<Pestana>("todos");
   const [texto, setTexto] = useState("");
+  const [usuario, setUsuario] = useState(""); // RF-36: filtro por usuario (vacío = todos)
   const [pagina, setPagina] = useState(0);
   const [anular, setAnular] = useState<LineaHistorial | null>(null);
 
@@ -60,9 +61,20 @@ export default function Historial() {
   const filas = q.datos ?? (q.error ? NADA : null);
   const error = q.error;
 
+  // Usuarios que aparecen en el rango elegido (el reponedor solo se ve a sí mismo por RLS).
+  const usuarios = useMemo(() => {
+    const m = new Map<string, string>();
+    (filas ?? []).forEach((f) => m.set(f.usuario_id, f.usuario));
+    return [...m].sort((a, b) => a[1].localeCompare(b[1], "es"));
+  }, [filas]);
   const filtradas = useMemo(
-    () => (filas ?? []).filter((f) => !texto || coincide(f.producto, texto) || f.codigo_lote.toLowerCase().includes(texto.trim().toLowerCase()) || f.codigo_barras.includes(texto.trim())),
-    [filas, texto],
+    () =>
+      (filas ?? []).filter(
+        (f) =>
+          (!usuario || f.usuario_id === usuario) &&
+          (!texto || coincide(f.producto, texto) || f.codigo_lote.toLowerCase().includes(texto.trim().toLowerCase()) || f.codigo_barras.includes(texto.trim())),
+      ),
+    [filas, texto, usuario],
   );
   const cuenta = (t: Pestana) => (t === "todos" ? filtradas.length : filtradas.filter((f) => f.tipo === t).length);
   const visibles = pestana === "todos" ? filtradas : filtradas.filter((f) => f.tipo === pestana);
@@ -72,7 +84,7 @@ export default function Historial() {
 
   function exportar() {
     descargarCSV(
-      `historial-${desde}-a-${hasta}`,
+      `historial-${desde}-a-${hasta}${usuario ? "-" + (usuarios.find(([id]) => id === usuario)?.[1] ?? "usuario").replace(/\s+/g, "-").toLowerCase() : ""}`,
       ["Fecha y hora", "Tipo", "Producto", "Código de barras", "Lote", "Cantidad", "Motivo / detalle", "Usuario", "Anulado", "Motivo de anulación"],
       visibles.map((f) => [
         fechaHora(f.creado_en),
@@ -120,6 +132,21 @@ export default function Historial() {
             </label>
             <input id="filtro" className="campo" placeholder="Producto, código o lote" value={texto} onChange={(e) => { setTexto(e.target.value); setPagina(0); }} />
           </div>
+          {perfil.rol !== "reponedor" && (
+            <div>
+              <label className="etiqueta" htmlFor="usuario">
+                Usuario
+              </label>
+              <select id="usuario" className="campo" value={usuario} onChange={(e) => { setUsuario(e.target.value); setPagina(0); }}>
+                <option value="">Todos</option>
+                {usuarios.map(([id, nombre]) => (
+                  <option key={id} value={id}>
+                    {nombre}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
           <div>
             <label className="etiqueta" htmlFor="desde">
               Desde

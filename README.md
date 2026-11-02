@@ -146,6 +146,18 @@ Lo que se hizo:
 
 ---
 
+### 7. Pruebas de la base de datos (Sprints 2 y 3)
+
+`supabase/pruebas/` tiene 71 casos que prueban las funciones, la RLS por rol (administrador, supervisor,
+reponedor y anónimo) y las alertas, llamando a la base de datos como lo hace la API (definición de terminado, punto 3).
+Se ejecutan en un PostgreSQL **local**, nunca en Supabase:
+
+```bash
+bash supabase/pruebas/ejecutar.sh   # termina con «71 | 0» (correctas | fallas)
+```
+
+---
+
 ## Estructura
 
 ```
