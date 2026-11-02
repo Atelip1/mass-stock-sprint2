@@ -8,30 +8,57 @@ Las reglas del stock viven en funciones transaccionales de la base de datos y lo
 
 ---
 
-## Estado: incremento del Sprint 2 (19/10 – 01/11/2026)
+## Estado: Sprints 2 a 5 y Product Backlog
 
-| HU | RF | Qué hace | Dónde |
+| Sprint | HU / RF | Qué hace | Pantalla |
 |---|---|---|---|
-| HU-01 | RF-01 | Inicio y cierre de sesión; mensaje que no revela qué falló; bloqueo de 15 min tras 5 intentos | `/login`, `api/auth/login` |
-| HU-02 | RF-02 | Menú por rol agrupado (Operación, Control, Análisis, Administración); «Sin acceso» si se abre por enlace | `lib/roles.ts`, `middleware.ts` |
-| HU-04 | RF-04 | Crear, editar, activar y desactivar usuarios; no se puede desactivar al último administrador | `/usuarios`, `api/admin/usuarios` |
-| HU-06 | RF-06 | Productos con código de barras obligatorio (valida dígito GS1) o código interno 20–29 | `/catalogo` |
-| HU-08 | RF-08 | Buscar, filtrar, editar y desactivar productos (nunca se borran) | `/catalogo` |
-| HU-09 | RF-09 | Categoría desde lista; «+ Nueva categoría» sugiere la parecida («bebibles» → «Bebidas») | `/catalogo` |
-| HU-12 | RF-12 | Buscador global sin tildes, por palabras parciales, código o lote; código exacto abre la ficha | encabezado |
-| HU-14 | RF-14 | Ingreso por guía de remisión con varias líneas; lectora USB elige el producto y pasa a cantidad | `/ingreso` |
-| HU-15 | RF-15 | Lote, vencimiento (no pasado) y zona por línea; la mercadería entra al almacén | `/ingreso` |
-| HU-22 | RF-22 | Lectura de EAN-13/EAN-8 con la cámara del celular | botón «Cámara» |
-| HU-34 | RF-34 | Stock en almacén, percha y total, con barra de percha, estados, filtros, orden y páginas de 20 | `/stock` |
-| HU-35 | RF-35 | «Conectado / Reconectando / Sin conexión», hora de actualización y «Reintentar» | encabezado |
+| 2 | RF-01 | Inicio y cierre de sesión; bloqueo de 15 min tras 5 intentos | `/login` |
+| 2 | RF-02 | Menú por rol (Operación, Control, Análisis, Administración); «Sin acceso» por enlace | todas |
+| 2 | RF-04, RF-05 | Usuarios con 3 roles; contraseña temporal y restablecimiento | `/usuarios` |
+| 2 | RF-06, RF-08, RF-09 | Catálogo con código de barras GS1 o interno 20–29; categoría parecida | `/catalogo` |
+| 2 | RF-12, RF-22 | Buscador global sin tildes; lectura con la cámara | encabezado |
+| 2 | RF-14, RF-15 | Ingreso por guía con lote, vencimiento y zona | `/ingreso` |
+| 2 | RF-34, RF-35 | Stock en tiempo real y estado de la conexión | `/stock` |
+| 3 | RF-13 | Ficha con stock, lotes, movimientos y alertas | clic en un producto |
+| 3 | RF-16 | Reposición de percha por FEFO desde pendientes, lectora o lista | `/reponer` |
+| 3 | RF-17 | Salida de varios productos por venta (FEFO), merma o vencimiento | `/salida` |
+| 3 | RF-18 | Conteo físico; el ajuste queda pendiente | `/conteo` |
+| 3 | RF-23 | Alertas automáticas de abastecimiento y de percha (RN-07) | base de datos |
+| 3 | RF-24, RF-25 | Alertas ordenadas por nivel y ABC, con su acción por fila y para varias | `/reposicion` |
+| 3 | RF-27 | Seguimiento: Pendiente, En reposición, Repuesto, Cerrado | `/reposicion` → Seguimiento |
+| 3 | RF-30 | Lotes vencidos y por vencer (30 días) | `/vencimientos` |
+| 3 | RF-36 | Historial por tipo con contadores; el reponedor ve solo lo suyo | `/historial` |
+| 4 | RF-19 | Aprobar o rechazar ajustes con motivo; nadie aprueba su propio conteo | `/conteo` |
+| 4 | RF-20 | Anular un movimiento con motivo; el stock se revierte | `/historial` |
+| 4 | RF-21 | Importar las ventas de caja (Excel o CSV); las filas con error se informan | `/importar-ventas` |
+| 4 | RF-26 | Cantidad sugerida en cada alerta y en la reposición | `/reposicion`, `/reponer` |
+| 4 | RF-32, RF-33 | Inicio completo del administrador/supervisor e inicio del reponedor | `/` |
+| 4 | RF-37 | Rotación por ventas con clasificación ABC (7, 30, 90 días o rango) | `/rotacion` |
+| 4 | RF-39, RF-40 | Indicadores semanales frente a línea base y meta; historial de la línea base | `/indicadores` |
+| 5 | RF-03, RNF-19 | Mi cuenta: cambiar la contraseña pidiendo la actual; modo oscuro que se recuerda | `/mi-cuenta`, menú del usuario |
+| 5 | RF-05 | Restablecer la contraseña con una temporal (y desbloquear la cuenta) | `/usuarios` |
+| 5 | RF-07 | Aviso de nombre parecido al registrar un producto («ACEITES primor 1 L» ≈ «Aceite Primor 1L») | `/catalogo` |
+| 5 | RF-11 | Proveedores: «+ Nuevo proveedor», RUC de 11 dígitos sin repetir, días de entrega | `/catalogo` → Proveedores |
+| 5 | RF-28 | Solicitudes al proveedor y lista de pedido | `/reposicion` → Solicitudes |
+| 5 | RF-31 | Retiro, oferta o devolución de lotes por vencer | `/vencimientos` |
+| 5 | RF-38 | Exportar a CSV el stock, las alertas, el historial, la rotación y la lista de pedido | cada tabla |
+| Backlog | RF-10 | Fusionar categorías duplicadas | `/catalogo` → Categorías |
+| Backlog | RF-29 | Campana con las alertas nuevas; cada aviso lleva a su alerta | encabezado |
+| Backlog | RF-41 | Parámetros: días de aviso, % crítico, días del mínimo sugerido, stock de seguridad y zonas | `/parametros` |
+| Backlog | RN-06 | Stock mínimo sugerido con las ventas reales al editar un producto | `/catalogo` |
 
-Además quedan listos: la **ficha de producto** (RF-13, se abre desde la tabla y el buscador, porque RF-34 y RF-12 la piden),
-el **cambio obligatorio de contraseña** en el primer ingreso (parte de RF-03, necesario para RF-04), el **cierre por 30 min de
-inactividad** (RNF-12) y el **bloqueo de registros sin conexión** (RNF-18).
+Con esto están los 41 requerimientos funcionales. Queda para la prueba en tienda del Sprint 5: medir la línea base real,
+probar en un celular Android de un reponedor y reemplazar el ícono por el logo oficial (RNF-05).
 
-Pendiente para el Sprint 3: reposición, salida de varios productos, conteo, alertas y su seguimiento, vencimientos e historial.
+### Decisiones de Sprints 3 y 4 (para revisarlas en la Sprint Review)
 
----
+- **Cantidad sugerida (RF-26):** lleva el stock al **doble** de su mínimo; en percha, al doble del mínimo de percha sin superar el almacén.
+  Coincide con los números del prototipo (Figura 12). Si la tienda prefiere otra cifra, se cambia en una línea de `alertas_activas()`.
+- **Alertas:** se recalculan solas al terminar cada movimiento (no a mitad de un traslado) y cuando se abre una pantalla de control,
+  porque un lote vence sin que nada cambie en la base de datos.
+- **Ajuste positivo:** las unidades de más se suman al lote vigente que vence más tarde. Si no hay lotes vigentes, pide registrar un ingreso.
+- **Importar ventas:** se agrupan las filas del mismo código; no se importa dos veces el mismo día (se anula en el Historial y se vuelve a cargar).
+- **Indicadores:** la última semana es el valor actual; la línea base nunca está escrita en el código (RN-19), se registra en la pantalla.
 
 ## Puesta en marcha
 
@@ -42,8 +69,12 @@ Crea dos proyectos en <https://supabase.com> (plan gratuito, región **South Ame
 
 En cada proyecto:
 
-1. **SQL Editor** → pega y ejecuta `supabase/migrations/20261019000001_esquema_inicial.sql`.
-2. **SQL Editor** → ejecuta `supabase/seed.sql` (categorías oficiales y proveedores).
+1. **SQL Editor** → pega y ejecuta, **en este orden**, cada archivo de `supabase/migrations/`:
+   1. `20261019000001_esquema_inicial.sql` (Sprint 2)
+   2. `20261102000001_sprint3_operacion_y_alertas.sql` (Sprint 3)
+   3. `20261116000001_sprint4_control_y_analisis.sql` (Sprint 4)
+   4. `20261130000001_sprint5_y_backlog.sql` (Sprint 5 y Product Backlog)
+2. **SQL Editor** → ejecuta `supabase/seed.sql` (categorías oficiales y proveedores) si aún no lo hiciste.
    Los RUC de los proveedores son de ejemplo: cámbialos por los reales en *Table Editor → proveedores*.
 3. **Authentication → Sign In / Providers → Email**: desactiva **Allow new users to sign up**
    (las cuentas solo las crea el administrador) y desactiva **Confirm email**. Pon la longitud mínima de contraseña en 8.
@@ -66,7 +97,7 @@ El comando imprime una contraseña temporal; al ingresar, el sistema pide crear 
 
 ### 4. Datos de ejemplo (solo en desarrollo)
 
-En el SQL Editor del proyecto **de desarrollo** ejecuta `supabase/demo/datos_ejemplo.sql`.
+En el SQL Editor del proyecto **de desarrollo** ejecuta `supabase/demo/datos_ejemplo.sql` (después de crear el administrador).
 Carga los 9 productos del prototipo con su stock en almacén y percha. **No lo ejecutes en producción.**
 
 ### 5. Ejecutar
@@ -76,6 +107,33 @@ npm run dev        # http://localhost:3000
 ```
 
 La cámara del celular solo funciona con HTTPS o en `localhost`. Para probarla en el celular, usa la vista previa de Vercel.
+
+### Velocidad: por qué `npm run dev` se siente lento
+
+`npm run dev` es el modo de **desarrollo**: compila cada pantalla la primera vez que la abres y no precarga las demás,
+así que cada clic tarda alrededor de un segundo (más en Windows). Es normal y no pasa en Vercel.
+Para probar la velocidad real en tu computadora (compila una vez y luego cada clic es inmediato):
+
+```bash
+npm run rapido     # = npm run build + npm start → http://localhost:3000
+```
+
+Medido con 70 ms de demora de red simulada hacia Supabase (como Chincha → São Paulo), del clic en el menú hasta ver los datos:
+
+| | Versión del Sprint 4 | Ahora |
+|---|---|---|
+| Promedio por clic (producción) | 0,48 s | 0,10 s al volver · 0,19 s la primera vez |
+| Reposición | 0,85 s | 0,06 s |
+| Inicio | 1,00 s | 0,06 s |
+| `npm run dev`, primera vez en cada pantalla | ~1,5 s (compila) | ~1,6 s (compila); 0,15 s al volver |
+
+Lo que se hizo:
+
+- El middleware verifica la sesión y lee el perfil **una vez** y se lo pasa a la pantalla (antes eran 4 consultas por clic).
+- Cada pantalla muestra al instante sus últimos datos y los actualiza en segundo plano (`src/lib/datos.ts`).
+- La revisión de alertas por vencimiento corre una vez al entrar y cada 10 minutos, sin frenar las pantallas.
+- Al volver a una pantalla en menos de 3 minutos no se pide de nuevo al servidor (`staleTimes` en `next.config.ts`).
+- Esqueleto de carga inmediato al hacer clic (`src/app/(app)/loading.tsx`) y Turbopack en `npm run dev`.
 
 ### 6. Publicar en Vercel
 
@@ -92,7 +150,7 @@ La cámara del celular solo funciona con HTTPS o en `localhost`. Para probarla e
 
 ```
 supabase/
-  migrations/      Esquema, funciones de registro, vista de stock, RLS y Realtime
+  migrations/      Esquema y funciones por sprint (stock, alertas, ajustes, ventas, indicadores), RLS y Realtime
   seed.sql         Categorías oficiales y proveedores
   demo/            Datos de ejemplo del prototipo (solo desarrollo)
 scripts/
@@ -103,7 +161,9 @@ src/
   components/      Shell (menú y encabezado), buscador, cámara, selector, ficha, conexión, avisos
   app/
     login/  cambiar-password/
-    (app)/  inicio, ingreso, stock, catalogo, usuarios, sin-acceso
+    (app)/  inicio, ingreso, reponer, salida, conteo, importar-ventas, stock, reposicion,
+            vencimientos, historial, rotacion, indicadores, catalogo, usuarios, parametros,
+            mi-cuenta, sin-acceso
     api/    auth/login, auth/logout, auth/cambiar-password, admin/usuarios
 ```
 
@@ -115,7 +175,7 @@ src/
 4. Antes de dar la historia por terminada, revisa la definición de terminado: criterio de aceptación, celular real a 360 px,
    permisos probados con los tres roles (también llamando a la API) y mensajes de error que dicen cómo corregir.
 
-## Decisiones del Sprint 2
+## Decisiones del Sprint 2 (siguen vigentes)
 
 - **Toda operación que cambia el stock es una función** (`registrar_ingreso`): valida rol, cantidades, lote, vencimiento y zona,
   y si una línea falla no se guarda ninguna. Los mensajes indican la línea y el producto («Línea 2 (Cerveza Pilsen 620ml): …»).

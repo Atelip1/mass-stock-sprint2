@@ -5,7 +5,7 @@ import { supabaseNavegador } from "@/lib/supabase/client";
 import { diasHasta, fecha, fechaHora, mensajeError } from "@/lib/formato";
 import type { FilaStock } from "@/lib/tipos";
 import { useConexion } from "./Conexion";
-import { BarraPercha, Etiqueta, EtiquetaStock, MensajeError } from "./ui";
+import { BarraPercha, duracion, Etiqueta, EtiquetaEstadoReposicion, EtiquetaNivel, EtiquetaStock, EtiquetaTipoAlerta, MensajeError } from "./ui";
 
 type Ctx = { abrir: (productoId: string) => void };
 const FichaCtx = createContext<Ctx | null>(null);
@@ -53,13 +53,14 @@ function Ficha({ productoId, onCerrar }: { productoId: string; onCerrar: () => v
   const [fila, setFila] = useState<FilaStock | null>(null);
   const [lotes, setLotes] = useState<Lote[]>([]);
   const [movs, setMovs] = useState<Mov[]>([]);
+  const [alertas, setAlertas] = useState<{ id: string; tipo: "abastecimiento" | "percha"; nivel: string; estado: string; detectada_en: string }[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const supabase = supabaseNavegador();
     let vigente = true;
     (async () => {
-      const [a, b, c] = await Promise.all([
+      const [a, b, c, d] = await Promise.all([
         supabase.from("v_stock").select("*").eq("producto_id", productoId).maybeSingle(),
         supabase
           .from("lotes")
@@ -74,6 +75,7 @@ function Ficha({ productoId, onCerrar }: { productoId: string; onCerrar: () => v
           .eq("movimiento_lineas.producto_id", productoId)
           .order("creado_en", { ascending: false })
           .limit(5),
+        supabase.from("alertas").select("id, tipo, nivel, estado, detectada_en").eq("producto_id", productoId).neq("estado", "cerrado"),
       ]);
       if (!vigente) return;
       const e = a.error ?? b.error ?? c.error;
@@ -81,6 +83,7 @@ function Ficha({ productoId, onCerrar }: { productoId: string; onCerrar: () => v
       setFila((a.data as FilaStock) ?? null);
       setLotes(((b.data as Lote[]) ?? []).filter((l) => l.existencias.some((x) => x.cantidad > 0)));
       setMovs((c.data as unknown as Mov[]) ?? []);
+      setAlertas((d.data as typeof alertas) ?? []);
     })();
     return () => {
       vigente = false;
@@ -96,9 +99,9 @@ function Ficha({ productoId, onCerrar }: { productoId: string; onCerrar: () => v
   const faltan = fila ? Math.max(0, fila.minimo_percha - fila.percha + 1) : 0;
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-texto/30" onClick={onCerrar}>
+    <div className="fixed inset-0 z-50 flex justify-end bg-black/30" onClick={onCerrar}>
       <aside
-        className="h-full w-full max-w-lg overflow-y-auto border-t-4 border-amarillo bg-white p-5 shadow-2xl"
+        className="h-full w-full max-w-lg overflow-y-auto border-t-4 border-amarillo bg-panel p-5 shadow-2xl"
         onClick={(e) => e.stopPropagation()}
         aria-label="Ficha de producto"
       >
@@ -150,6 +153,22 @@ function Ficha({ productoId, onCerrar }: { productoId: string; onCerrar: () => v
                 : `La percha tiene ${fila.percha} de las ${fila.minimo_percha} unidades mínimas: faltan ${faltan} para cubrirla. Hay ${fila.almacen} en almacén.`}
             </p>
           </>
+        )}
+
+        <h3 className="mt-6 text-sm font-bold">Alertas activas</h3>
+        {alertas.length === 0 ? (
+          <p className="mt-2 text-sm text-suave">Sin alertas: el stock y la percha están sobre su mínimo.</p>
+        ) : (
+          <ul className="mt-2 space-y-2 text-sm">
+            {alertas.map((al) => (
+              <li key={al.id} className="flex flex-wrap items-center gap-2">
+                <EtiquetaTipoAlerta tipo={al.tipo} />
+                <EtiquetaNivel nivel={al.nivel} />
+                <EtiquetaEstadoReposicion estado={al.estado} />
+                <span className="text-xs text-suave">hace {duracion((Date.now() - Date.parse(al.detectada_en)) / 3_600_000)}</span>
+              </li>
+            ))}
+          </ul>
         )}
 
         <h3 className="mt-6 text-sm font-bold">Lotes vigentes</h3>

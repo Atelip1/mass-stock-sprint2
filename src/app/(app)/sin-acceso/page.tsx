@@ -1,11 +1,11 @@
 import Link from "next/link";
 import { Encabezado } from "@/components/ui";
-import { perfilActual } from "@/lib/supabase/server";
+import { perfilDePantalla } from "@/lib/supabase/server";
 import { NOMBRE_ROL } from "@/lib/tipos";
 
 /** RF-02 (Figura 37): una pantalla no permitida abierta por enlace muestra «Sin acceso». */
 export default async function SinAcceso() {
-  const perfil = await perfilActual();
+  const perfil = await perfilDePantalla();
   return (
     <>
       <Encabezado

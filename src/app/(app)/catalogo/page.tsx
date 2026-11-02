@@ -6,7 +6,8 @@ import { CampoCodigo } from "@/components/CampoCodigo";
 import { useConexion } from "@/components/Conexion";
 import { useFicha } from "@/components/FichaProducto";
 import { usePerfil } from "@/components/Shell";
-import { Cargando, Encabezado, Etiqueta, MensajeError, Vacio } from "@/components/ui";
+import { Cargando, Encabezado, Etiqueta, MensajeError, Pestanas, Vacio } from "@/components/ui";
+import { Categorias, NuevoProveedor, Proveedores } from "./Extras";
 import { supabaseNavegador } from "@/lib/supabase/client";
 import { coincide, eanValido, mensajeError } from "@/lib/formato";
 import { UNIDADES, type Categoria, type Producto, type Proveedor } from "@/lib/tipos";
@@ -45,6 +46,7 @@ export default function Catalogo() {
   const [categorias, setCategorias] = useState<Categoria[]>([]);
   const [proveedores, setProveedores] = useState<Proveedor[]>([]);
   const [form, setForm] = useState<Form>(VACIO);
+  const [pestana, setPestana] = useState<"productos" | "categorias" | "proveedores">("productos");
 
   const cargar = useCallback(async () => {
     const supabase = supabaseNavegador();
@@ -67,9 +69,20 @@ export default function Catalogo() {
       <Encabezado
         ruta="Administración › Catálogo"
         titulo="Catálogo de productos"
-        descripcion={esAdmin ? "Registra productos sin duplicados y con categoría y proveedor de una lista." : "Consulta los productos registrados."}
+        descripcion={esAdmin ? "Registra productos sin duplicados y con categoría y proveedor de una lista." : "Consulta los productos, categorías y proveedores registrados."}
       />
-      <div className={`grid gap-4 ${esAdmin ? "lg:grid-cols-[minmax(0,420px)_1fr]" : ""}`}>
+      <Pestanas
+        valor={pestana}
+        onCambiar={setPestana}
+        opciones={[
+          { valor: "productos", etiqueta: "Productos", cantidad: productos?.filter((p) => p.activo).length },
+          { valor: "categorias", etiqueta: "Categorías", cantidad: categorias.length },
+          { valor: "proveedores", etiqueta: "Proveedores", cantidad: proveedores.length },
+        ]}
+      />
+      {pestana === "categorias" && <Categorias esAdmin={esAdmin} productos={productos ?? []} onCambio={cargar} />}
+      {pestana === "proveedores" && <Proveedores esAdmin={esAdmin} productos={productos ?? []} onCambio={cargar} />}
+      <div className={`grid gap-4 ${esAdmin ? "lg:grid-cols-[minmax(0,420px)_1fr]" : ""} ${pestana === "productos" ? "" : "hidden"}`}>
         {esAdmin && (
           <FormularioProducto
             form={form}
@@ -78,6 +91,7 @@ export default function Catalogo() {
             proveedores={proveedores}
             onGuardado={cargar}
             onCategoriaCreada={(c) => setCategorias((cs) => [...cs, c].sort((a, b) => a.nombre.localeCompare(b.nombre)))}
+            onProveedorCreado={(p) => setProveedores((ps) => [...ps, p].sort((a, b) => a.razon_social.localeCompare(b.razon_social)))}
           />
         )}
         <ListaProductos
@@ -112,6 +126,7 @@ function FormularioProducto({
   proveedores,
   onGuardado,
   onCategoriaCreada,
+  onProveedorCreado,
 }: {
   form: Form;
   setForm: React.Dispatch<React.SetStateAction<Form>>;
@@ -119,12 +134,25 @@ function FormularioProducto({
   proveedores: Proveedor[];
   onGuardado: () => void;
   onCategoriaCreada: (c: Categoria) => void;
+  onProveedorCreado: (p: Proveedor) => void;
 }) {
   const { avisar } = useAvisos();
   const [error, setError] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
   const [nuevaCat, setNuevaCat] = useState<string | null>(null);
   const [parecidas, setParecidas] = useState<Categoria[]>([]);
+  // RF-07: productos con nombre parecido; hay que confirmar antes de registrar.
+  const [similares, setSimilares] = useState<{ id: string; nombre: string; codigo_barras: string }[]>([]);
+  const [nuevoProv, setNuevoProv] = useState(false);
+  // RN-06: stock mínimo sugerido con las ventas reales (solo al editar un producto que ya vende).
+  const [sugerencia, setSugerencia] = useState<{ sugerido: number | null; venta_diaria: number; dias_entrega: number; dias_seguridad: number; dias_calculo: number } | null>(null);
+  useEffect(() => {
+    setSimilares([]);
+    if (!form.id) return setSugerencia(null);
+    supabaseNavegador()
+      .rpc("minimo_sugerido", { p_producto: form.id })
+      .then(({ data }: { data: unknown }) => setSugerencia(((data as (typeof sugerencia)[]) ?? [])[0] ?? null));
+  }, [form.id]);
 
   const set = <K extends keyof Form>(k: K, v: Form[K]) => setForm((f) => ({ ...f, [k]: v }));
 
@@ -168,12 +196,22 @@ function FormularioProducto({
     return null;
   }
 
-  async function guardar(e: React.FormEvent) {
+  async function guardar(e: React.FormEvent, confirmado = false) {
     e.preventDefault();
     const v = validar();
     if (v) return setError(v);
     setGuardando(true);
     setError(null);
+    if (!confirmado) {
+      const { data: par } = await supabaseNavegador().rpc("productos_parecidos", { p_nombre: form.nombre, p_excluir: form.id });
+      const lista = (par as typeof similares) ?? [];
+      if (lista.length) {
+        setSimilares(lista);
+        setGuardando(false);
+        return;
+      }
+    }
+    setSimilares([]);
     const datos = {
       nombre: form.nombre.trim(),
       categoria_id: form.categoria_id,
@@ -233,8 +271,24 @@ function FormularioProducto({
               </option>
             ))}
           </select>
+          {!nuevoProv && (
+            <button type="button" className="enlace mt-1 text-xs" onClick={() => setNuevoProv(true)}>
+              + Nuevo proveedor
+            </button>
+          )}
         </div>
       </div>
+      {nuevoProv && (
+        <NuevoProveedor
+          onCancelar={() => setNuevoProv(false)}
+          onCreado={(p) => {
+            onProveedorCreado(p);
+            set("proveedor_id", p.id);
+            setNuevoProv(false);
+            avisar(`Proveedor «${p.razon_social}» registrado.`);
+          }}
+        />
+      )}
 
       {nuevaCat !== null && (
         <div className="mt-3 rounded-md border border-borde bg-fondo/60 p-3">
@@ -340,6 +394,17 @@ function FormularioProducto({
             onChange={(e) => set("stock_minimo", e.target.value.replace(/\D/g, ""))}
           />
           <p className="ayuda">Por debajo se pide al proveedor.</p>
+          {sugerencia?.sugerido != null && Number(form.stock_minimo) !== sugerencia.sugerido && (
+            <p className="mt-1 text-xs">
+              Sugerido según ventas: <b>{sugerencia.sugerido}</b>{" "}
+              <span className="text-suave">
+                ({String(sugerencia.venta_diaria).replace(".", ",")}/día × {sugerencia.dias_entrega} días de entrega + {sugerencia.dias_seguridad} de seguridad)
+              </span>{" "}
+              <button type="button" className="enlace" onClick={() => set("stock_minimo", String(sugerencia.sugerido))}>
+                Usar
+              </button>
+            </p>
+          )}
         </div>
         <div>
           <label className="etiqueta" htmlFor="percha">
@@ -356,6 +421,27 @@ function FormularioProducto({
         </div>
       </div>
       <p className="mt-3 text-xs text-suave">El stock entra solo con un ingreso de proveedor; no se registra aquí.</p>
+      {similares.length > 0 && (
+        <div role="alert" className="mt-3 rounded-md border border-amarillo bg-aviso-fondo/60 p-3 text-sm">
+          <p className="font-semibold text-aviso">Ya hay un producto con un nombre parecido:</p>
+          <ul className="mt-1 list-inside list-disc">
+            {similares.map((p) => (
+              <li key={p.id}>
+                {p.nombre} <span className="font-mono text-xs text-suave">{p.codigo_barras}</span>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-1 text-suave">¿Es otro producto (otra presentación o marca)? Si es el mismo, no lo registres de nuevo.</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <button type="button" className="btn-principal min-h-9" onClick={(e) => guardar(e as unknown as React.FormEvent, true)}>
+              Sí, es otro producto
+            </button>
+            <button type="button" className="btn-secundario min-h-9" onClick={() => setSimilares([])}>
+              Revisar
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="mt-3">
         <MensajeError>{error}</MensajeError>

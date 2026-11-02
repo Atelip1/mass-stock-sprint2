@@ -96,7 +96,7 @@ export function BuscadorGlobal() {
           }}
         />
         {abierto && q.trim() && (
-          <ul className="absolute z-40 mt-1 max-h-96 w-full overflow-auto rounded-md border border-borde bg-white py-1 shadow-lg" role="listbox">
+          <ul className="absolute z-40 mt-1 max-h-96 w-full overflow-auto rounded-md border border-borde bg-panel py-1 shadow-lg" role="listbox">
             {!buscando && res.length === 0 && <li className="px-3 py-3 text-sm text-suave">No se encontró «{q}». Prueba con otra palabra o el código.</li>}
             {res.map((f, i) => (
               <li

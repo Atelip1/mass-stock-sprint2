@@ -87,7 +87,7 @@ export function SelectorProducto({
           ref={lista}
           id={idLista}
           role="listbox"
-          className="absolute z-30 mt-1 max-h-72 w-full overflow-auto rounded-md border border-borde bg-white py-1 shadow-lg"
+          className="absolute z-30 mt-1 max-h-72 w-full overflow-auto rounded-md border border-borde bg-panel py-1 shadow-lg"
         >
           {filtradas.length === 0 && <li className="px-3 py-2 text-sm text-suave">No hay productos que coincidan.</li>}
           {filtradas.map((o, i) => (

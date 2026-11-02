@@ -4,9 +4,9 @@ import type { ReactNode } from "react";
 export function PantallaAcceso({ children }: { children: ReactNode }) {
   return (
     <div className="grid min-h-dvh lg:grid-cols-[1.1fr_1fr]">
-      <section className="flex flex-col justify-between bg-azul p-6 text-white sm:p-10">
+      <section className="flex flex-col justify-between bg-marca p-6 text-white sm:p-10">
         <div className="flex items-center gap-2">
-          <span className="grid size-9 place-items-center rounded-md bg-amarillo text-azul" aria-hidden>
+          <span className="grid size-9 place-items-center rounded-md bg-amarillo text-marca" aria-hidden>
             <svg viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth="2.2">
               <path d="M3 7l9-4 9 4-9 4-9-4zM3 7v10l9 4 9-4V7M12 11v10" />
             </svg>

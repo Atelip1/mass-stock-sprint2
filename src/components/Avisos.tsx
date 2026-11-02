@@ -48,7 +48,7 @@ export function AvisosProvider({ children }: { children: ReactNode }) {
           <div
             key={a.id}
             className={`pointer-events-auto max-w-md rounded-md px-4 py-3 text-sm font-semibold shadow-lg ${
-              a.tono === "ok" ? "bg-texto text-white" : "bg-peligro text-white"
+              a.tono === "ok" ? "bg-tinta text-white ring-1 ring-white/10" : "bg-peligro-fondo text-peligro ring-1 ring-peligro/40"
             }`}
           >
             {a.texto}
@@ -56,7 +56,7 @@ export function AvisosProvider({ children }: { children: ReactNode }) {
         ))}
       </div>
       {conf && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-texto/40 p-4" role="dialog" aria-modal>
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal>
           <div className="panel w-full max-w-sm p-5 shadow-xl">
             <h2 className="text-lg font-bold">{conf.titulo}</h2>
             <p className="mt-2 text-sm text-suave">{conf.texto}</p>

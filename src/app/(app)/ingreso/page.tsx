@@ -9,6 +9,7 @@ import { usePerfil } from "@/components/Shell";
 import { Encabezado, MensajeError } from "@/components/ui";
 import { supabaseNavegador } from "@/lib/supabase/client";
 import { fechaHora, hoyISO, mensajeError } from "@/lib/formato";
+import { useAhora } from "@/lib/useAhora";
 import type { FilaStock, Proveedor } from "@/lib/tipos";
 
 type Linea = {
@@ -48,7 +49,7 @@ export default function RegistrarIngreso() {
   const [lineas, setLineas] = useState<Linea[]>(() => [nuevaLinea()]);
   const [error, setError] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
-  const [ahora, setAhora] = useState(() => new Date());
+  const ahora = useAhora();
   const refsCantidad = useRef(new Map<number, HTMLInputElement>());
 
   useEffect(() => {
@@ -63,11 +64,6 @@ export default function RegistrarIngreso() {
       setZonas((z.data?.valor as string[]) ?? []);
     });
   }, [version]);
-
-  useEffect(() => {
-    const t = setInterval(() => setAhora(new Date()), 30_000);
-    return () => clearInterval(t);
-  }, []);
 
   const opciones: OpcionProducto[] = useMemo(
     () => productos.map((p) => ({ id: p.producto_id, nombre: p.nombre, codigo_barras: p.codigo_barras, detalle: `stock ${p.total}` })),
@@ -308,7 +304,7 @@ export default function RegistrarIngreso() {
         </button>
 
         <p className="mt-4 text-xs text-suave">
-          Registra: {perfil.nombre} · {fechaHora(ahora)} (se toma de la sesión)
+          Registra: {perfil.nombre}{ahora && ` · ${fechaHora(ahora)}`} (se toma de la sesión)
         </p>
         <div className="mt-3">
           <MensajeError>{error}</MensajeError>

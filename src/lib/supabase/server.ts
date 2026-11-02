@@ -1,5 +1,5 @@
 import "server-only";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
 import { createClient } from "@supabase/supabase-js";
 import type { Perfil } from "@/lib/tipos";
@@ -37,7 +37,7 @@ export function supabaseAdmin() {
   });
 }
 
-/** Perfil del usuario con sesión, o null. */
+/** Perfil del usuario con sesión, verificado con Supabase. Lo usan las funciones de la API. */
 export async function perfilActual(): Promise<Perfil | null> {
   const supabase = await supabaseServidor();
   const {
@@ -46,4 +46,22 @@ export async function perfilActual(): Promise<Perfil | null> {
   if (!user) return null;
   const { data } = await supabase.from("perfiles").select("*").eq("id", user.id).maybeSingle();
   return (data as Perfil) ?? null;
+}
+
+/**
+ * Perfil para el layout de las pantallas: el middleware ya verificó la sesión y lo dejó
+ * en una cabecera interna (reemplaza cualquier valor que mande el navegador), así cada clic
+ * hace un viaje menos a Supabase. Si falta, se consulta como siempre.
+ * No usar en las rutas /api: ahí el middleware no fija la cabecera.
+ */
+export async function perfilDePantalla(): Promise<Perfil | null> {
+  const desdeMiddleware = (await headers()).get("x-mass-perfil");
+  if (desdeMiddleware) {
+    try {
+      return JSON.parse(decodeURIComponent(desdeMiddleware)) as Perfil;
+    } catch {
+      // Cabecera dañada: se consulta a Supabase.
+    }
+  }
+  return perfilActual();
 }

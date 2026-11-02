@@ -95,3 +95,98 @@ export function MensajeError({ children }: { children: ReactNode }) {
     </p>
   );
 }
+
+/* ---------- Etiquetas de alertas y reposición (mismos colores en todas las pantallas, RNF-06) ---------- */
+
+export function EtiquetaTipoAlerta({ tipo }: { tipo: "abastecimiento" | "percha" }) {
+  return tipo === "abastecimiento" ? <Etiqueta tono="info">Abastecimiento</Etiqueta> : <Etiqueta tono="neutro">Percha</Etiqueta>;
+}
+
+export function EtiquetaNivel({ nivel }: { nivel: string }) {
+  switch (nivel) {
+    case "sin_stock":
+      return <Etiqueta tono="peligro">Sin stock</Etiqueta>;
+    case "critica":
+      return <Etiqueta tono="peligro">Crítica</Etiqueta>;
+    case "preventiva":
+      return <Etiqueta tono="aviso">Preventiva</Etiqueta>;
+    case "vacia":
+      return <Etiqueta tono="peligro">Percha vacía</Etiqueta>;
+    default:
+      return <Etiqueta tono="aviso">Por reponer</Etiqueta>;
+  }
+}
+
+export function EtiquetaEstadoReposicion({ estado }: { estado: string }) {
+  switch (estado) {
+    case "pendiente":
+      return <Etiqueta tono="aviso">Pendiente</Etiqueta>;
+    case "en_reposicion":
+      return <Etiqueta tono="info">En reposición</Etiqueta>;
+    case "repuesto":
+      return <Etiqueta tono="ok">Repuesto</Etiqueta>;
+    default:
+      return <Etiqueta tono="neutro">Cerrado</Etiqueta>;
+  }
+}
+
+export function EtiquetaClase({ clase }: { clase: string }) {
+  if (clase === "sin_ventas") return <Etiqueta tono="neutro">Sin ventas</Etiqueta>;
+  return <Etiqueta tono={clase === "A" ? "info" : "neutro"}>{clase}</Etiqueta>;
+}
+
+/** «Por vencer» según el parámetro de días de aviso (RN-10, RF-41); la vista v_vencimientos lo trae calculado. */
+export function EtiquetaVence({ dias, porVencer }: { dias: number; porVencer?: boolean }) {
+  if (dias < 0) return <Etiqueta tono="peligro">Vencido hace {-dias} {dias === -1 ? "día" : "días"}</Etiqueta>;
+  if (dias === 0) return <Etiqueta tono="peligro">Vence hoy</Etiqueta>;
+  if (porVencer ?? dias <= 7) return <Etiqueta tono="aviso">En {dias} {dias === 1 ? "día" : "días"}</Etiqueta>;
+  return <Etiqueta tono="neutro">En {dias} días</Etiqueta>;
+}
+
+/** Horas legibles: «45 min», «4,3 h», «2,1 d». */
+export function duracion(horas: number | null | undefined): string {
+  if (horas === null || horas === undefined) return "—";
+  if (horas < 1) return `${Math.round(horas * 60)} min`;
+  if (horas < 48) return `${horas.toFixed(1).replace(".", ",")} h`;
+  return `${(horas / 24).toFixed(1).replace(".", ",")} d`;
+}
+
+/** Pestañas simples con contador (RF-36: «las pestañas muestran su cantidad»). */
+export function Pestanas<T extends string>({
+  opciones,
+  valor,
+  onCambiar,
+}: {
+  opciones: { valor: T; etiqueta: string; cantidad?: number }[];
+  valor: T;
+  onCambiar: (v: T) => void;
+}) {
+  return (
+    <div role="tablist" className="mb-4 flex flex-wrap gap-1 rounded-lg border border-borde bg-panel p-1">
+      {opciones.map((o) => (
+        <button
+          key={o.valor}
+          role="tab"
+          aria-selected={o.valor === valor}
+          onClick={() => onCambiar(o.valor)}
+          className={`min-h-9 rounded-md px-3 text-sm font-semibold ${o.valor === valor ? "bg-marca text-white" : "text-suave hover:bg-fondo"}`}
+        >
+          {o.etiqueta}
+          {o.cantidad !== undefined && ` (${o.cantidad})`}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** Ventana modal común con título, contenido y acciones. */
+export function Modal({ titulo, children, onCerrar }: { titulo: string; children: ReactNode; onCerrar: () => void }) {
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal aria-label={titulo} onClick={onCerrar}>
+      <div className="panel w-full max-w-md p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
+        <h2 className="text-lg font-bold">{titulo}</h2>
+        {children}
+      </div>
+    </div>
+  );
+}

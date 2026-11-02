@@ -62,3 +62,76 @@ export const NOMBRE_ROL: Record<Rol, string> = {
 };
 
 export const UNIDADES = ["unidad", "botella", "lata", "paquete", "bolsa", "caja", "kg", "litro"] as const;
+
+export type TipoAlerta = "abastecimiento" | "percha";
+export type NivelAlerta = "preventiva" | "critica" | "sin_stock" | "por_reponer" | "vacia";
+export type EstadoAlerta = "pendiente" | "en_reposicion" | "repuesto" | "cerrado";
+export type ClaseABC = "A" | "B" | "C" | "sin_ventas";
+
+/** Fila de alertas_activas(). */
+export type AlertaActiva = {
+  id: string;
+  producto_id: string;
+  nombre: string;
+  codigo_barras: string;
+  tipo: TipoAlerta;
+  nivel: NivelAlerta;
+  estado: EstadoAlerta;
+  percha: number;
+  almacen: number;
+  total: number;
+  stock_minimo: number;
+  minimo_percha: number;
+  unidad: string;
+  cobertura_dias: number | null;
+  horas: number;
+  sugerido: number;
+  clase: ClaseABC;
+  almacen_vacio: boolean;
+  responsable: string | null;
+  proveedor_id: string;
+  detectada_en: string;
+};
+
+/** Fila de v_historial. */
+export type LineaHistorial = {
+  linea_id: string;
+  movimiento_id: string;
+  creado_en: string;
+  tipo: "ingreso" | "reposicion" | "salida" | "ajuste";
+  motivo: string | null;
+  guia_remision: string | null;
+  detalle: string | null;
+  anulado: boolean;
+  motivo_anulacion: string | null;
+  anulado_en: string | null;
+  usuario_id: string;
+  usuario: string;
+  anulado_por: string | null;
+  fecha_venta: string | null;
+  producto_id: string;
+  producto: string;
+  codigo_barras: string;
+  codigo_lote: string;
+  zona_almacen: string;
+  ubicacion_origen: "almacen" | "percha" | null;
+  ubicacion_destino: "almacen" | "percha" | null;
+  cantidad: number;
+  efecto: number;
+};
+
+/** Lote con sus existencias, para elegirlo en reposición y salida. */
+export type LoteConStock = {
+  id: string;
+  codigo_lote: string;
+  fecha_vencimiento: string | null;
+  zona_almacen: string;
+  existencias: { ubicacion: "almacen" | "percha"; cantidad: number }[];
+};
+
+export const NOMBRE_TIPO_MOV: Record<string, string> = {
+  ingreso: "Ingreso",
+  reposicion: "Reposición",
+  salida: "Salida",
+  ajuste: "Ajuste",
+};

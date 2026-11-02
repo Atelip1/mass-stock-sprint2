@@ -1,12 +1,14 @@
 "use client";
 
 import { useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
-import { AvisoSinConexion, useConexion } from "@/components/Conexion";
+import { useMemo, useState } from "react";
+import { AvisoSinConexion } from "@/components/Conexion";
+import { NADA, useDatos } from "@/lib/datos";
 import { useFicha } from "@/components/FichaProducto";
 import { BarraPercha, Cargando, Encabezado, Etiqueta, EtiquetaStock, MensajeError, Vacio } from "@/components/ui";
 import { supabaseNavegador } from "@/lib/supabase/client";
-import { coincide, diasHasta, fecha, mensajeError } from "@/lib/formato";
+import { coincide, diasHasta, fecha, hoyISO } from "@/lib/formato";
+import { descargarCSV } from "@/lib/csv";
 import type { Categoria, FilaStock } from "@/lib/tipos";
 
 type Columna = "nombre" | "categoria" | "percha" | "almacen" | "total" | "vencimiento" | "estado";
@@ -19,11 +21,13 @@ const PESO_ESTADO = { sin_stock: 0, critico: 1, bajo_minimo: 2, ok: 3 } as const
 export function TablaStock() {
   const params = useSearchParams();
   const { abrir } = useFicha();
-  const { version, marcarActualizado } = useConexion();
 
-  const [filas, setFilas] = useState<FilaStock[] | null>(null);
-  const [categorias, setCategorias] = useState<Categoria[]>([]);
-  const [error, setError] = useState<string | null>(null);
+  const { datos: filasDatos, error } = useDatos<FilaStock[]>("stock", () => supabaseNavegador().from("v_stock").select("*").eq("activo", true));
+  const { datos: categoriasDatos } = useDatos<Categoria[]>("categorias-activas", () =>
+    supabaseNavegador().from("categorias").select("id, nombre, activa").eq("activa", true).order("nombre"),
+  );
+  const filas = filasDatos ?? (error ? NADA : null);
+  const categorias = categoriasDatos ?? NADA;
   const [texto, setTexto] = useState("");
   const [categoria, setCategoria] = useState("todas");
   const [estado, setEstado] = useState<FiltroEstado>((params.get("estado") as FiltroEstado) ?? "todos");
@@ -31,27 +35,6 @@ export function TablaStock() {
     params.get("orden") === "vencimiento" ? { col: "vencimiento", asc: true } : { col: "nombre", asc: true },
   );
   const [pagina, setPagina] = useState(0);
-
-  useEffect(() => {
-    const supabase = supabaseNavegador();
-    let vigente = true;
-    Promise.all([
-      supabase.from("v_stock").select("*").eq("activo", true),
-      supabase.from("categorias").select("id, nombre, activa").eq("activa", true).order("nombre"),
-    ]).then(([s, c]) => {
-      if (!vigente) return;
-      if (s.error) setError(mensajeError(s.error));
-      else {
-        setError(null);
-        setFilas(s.data as FilaStock[]);
-        marcarActualizado();
-      }
-      setCategorias((c.data as Categoria[]) ?? []);
-    });
-    return () => {
-      vigente = false;
-    };
-  }, [version, marcarActualizado]);
 
   const visibles = useMemo(() => {
     if (!filas) return [];
@@ -180,6 +163,9 @@ export function TablaStock() {
               <option value="por_reponer">Percha por reponer</option>
             </select>
           </div>
+          <button className="btn-secundario" disabled={!visibles.length} onClick={() => exportarStock(visibles)}>
+            Exportar CSV
+          </button>
         </div>
 
         <p className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-borde px-4 py-2 text-xs text-suave">
@@ -277,5 +263,30 @@ export function TablaStock() {
         </div>
       </div>
     </>
+  );
+}
+
+const ESTADO_STOCK = { ok: "OK", bajo_minimo: "Bajo mínimo", critico: "Bajo mínimo · crítico", sin_stock: "Sin stock" } as const;
+const ESTADO_PERCHA = { ok: "Cubierta", por_reponer: "Por reponer", vacia: "Vacía" } as const;
+
+/** RF-38: exporta el stock con los mismos filtros y orden que la pantalla. */
+function exportarStock(filas: FilaStock[]) {
+  descargarCSV(
+    `stock-${hoyISO()}`,
+    ["Producto", "Código de barras", "Categoría", "Unidad", "En percha", "Mínimo de percha", "Estado de la percha", "En almacén", "Stock total", "Stock mínimo", "Estado del stock", "Próximo vencimiento"],
+    filas.map((f) => [
+      f.nombre,
+      f.codigo_barras,
+      f.categoria,
+      f.unidad,
+      f.percha,
+      f.minimo_percha,
+      ESTADO_PERCHA[f.estado_percha],
+      f.almacen,
+      f.total,
+      f.stock_minimo,
+      ESTADO_STOCK[f.estado_stock],
+      f.proximo_vencimiento ? fecha(f.proximo_vencimiento) : "",
+    ]),
   );
 }

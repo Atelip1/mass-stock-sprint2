@@ -56,6 +56,9 @@ export function ConexionProvider({ children }: { children: ReactNode }) {
         .channel("mass-stock")
         .on("postgres_changes", { event: "*", schema: "public", table: "existencias" }, () => setVersion((v) => v + 1))
         .on("postgres_changes", { event: "*", schema: "public", table: "productos" }, () => setVersion((v) => v + 1))
+        .on("postgres_changes", { event: "*", schema: "public", table: "alertas" }, () => setVersion((v) => v + 1))
+        .on("postgres_changes", { event: "*", schema: "public", table: "ajustes" }, () => setVersion((v) => v + 1))
+        .on("postgres_changes", { event: "*", schema: "public", table: "movimientos" }, () => setVersion((v) => v + 1))
         .subscribe((s: string) => {
           if (!activo) return;
           if (s === "SUBSCRIBED") {
@@ -87,6 +90,19 @@ export function ConexionProvider({ children }: { children: ReactNode }) {
       if (canal.current) supabase.removeChannel(canal.current);
     };
   }, [intento]);
+
+  // Un lote vence sin que cambie nada en la base: se revisan las alertas al entrar y cada 10 minutos,
+  // en segundo plano, y las pantallas recargan solo si algo cambió (antes cada pantalla esperaba esta revisión).
+  useEffect(() => {
+    const supabase = supabaseNavegador();
+    const revisar = () =>
+      supabase.rpc("refrescar_alertas").then(({ data }: { data: unknown }) => {
+        if (data === true) setVersion((v) => v + 1);
+      });
+    revisar();
+    const t = setInterval(revisar, 10 * 60_000);
+    return () => clearInterval(t);
+  }, []);
 
   const marcarActualizado = useCallback(() => setUltima(new Date()), []);
   const reintentar = useCallback(() => setIntento((i) => i + 1), []);

@@ -2,6 +2,8 @@
 
 /* Guía de estilo (RNF-05, RNF-06): azul y amarillo de la tienda, mismos colores de estado en todas las pantallas. */
 @theme {
+  --color-marca: #0b2fb5; /* Azul de la tienda para el menú lateral y fondos grandes (igual en ambos modos). */
+  --color-tinta: #121826; /* Texto sobre amarillo (igual en ambos modos). */
   --color-azul: #0b2fb5;
   --color-azul-oscuro: #08238a;
   --color-azul-claro: #e8edfc;
@@ -22,6 +24,26 @@
   --font-titulo: "Segoe UI Variable Display", "Segoe UI", ui-sans-serif, system-ui, -apple-system, Roboto, Arial, sans-serif;
 }
 
+/* RNF-19: modo oscuro. Se activa desde el menú del usuario o «Mi cuenta» y se recuerda en este equipo. */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --color-marca: #0a2488;
+  --color-azul: #8fb0ff;
+  --color-azul-oscuro: #b3c8ff;
+  --color-azul-claro: #1b2a52;
+  --color-fondo: #0d1424;
+  --color-panel: #151e33;
+  --color-borde: #2a3654;
+  --color-texto: #e7ebf3;
+  --color-suave: #9aa6bd;
+  --color-ok: #4ade80;
+  --color-ok-fondo: #12301f;
+  --color-aviso: #fbbf24;
+  --color-aviso-fondo: #33270b;
+  --color-peligro: #f87171;
+  --color-peligro-fondo: #3a1616;
+}
+
 html,
 body {
   background: var(--color-fondo);
@@ -38,7 +60,7 @@ h3 {
 /* Campos de formulario comunes */
 @layer components {
   .campo {
-    @apply w-full rounded-md border border-borde bg-white px-3 py-2.5 text-sm outline-none transition placeholder:text-suave/70 focus:border-azul focus:ring-2 focus:ring-azul/20 disabled:bg-fondo disabled:text-suave;
+    @apply w-full rounded-md border border-borde bg-panel px-3 py-2.5 text-sm outline-none transition placeholder:text-suave/70 focus:border-azul focus:ring-2 focus:ring-azul/20 disabled:bg-fondo disabled:text-suave;
   }
   .etiqueta {
     @apply mb-1 block text-sm font-semibold;
@@ -51,13 +73,13 @@ h3 {
     @apply inline-flex min-h-11 items-center justify-center gap-2 rounded-md px-4 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50;
   }
   .btn-principal {
-    @apply inline-flex min-h-11 items-center justify-center gap-2 rounded-md px-4 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 bg-amarillo text-texto hover:bg-amarillo-oscuro;
+    @apply inline-flex min-h-11 items-center justify-center gap-2 rounded-md px-4 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 bg-amarillo text-tinta hover:bg-amarillo-oscuro;
   }
   .btn-secundario {
-    @apply inline-flex min-h-11 items-center justify-center gap-2 rounded-md px-4 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 border border-borde bg-white text-texto hover:bg-fondo;
+    @apply inline-flex min-h-11 items-center justify-center gap-2 rounded-md px-4 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 border border-borde bg-panel text-texto hover:bg-fondo;
   }
   .btn-peligro {
-    @apply inline-flex min-h-11 items-center justify-center gap-2 rounded-md px-4 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 border border-peligro/30 bg-white text-peligro hover:bg-peligro-fondo;
+    @apply inline-flex min-h-11 items-center justify-center gap-2 rounded-md px-4 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 border border-peligro/30 bg-panel text-peligro hover:bg-peligro-fondo;
   }
   .enlace {
     @apply font-semibold text-azul underline-offset-2 hover:underline;
