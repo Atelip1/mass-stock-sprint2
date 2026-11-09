@@ -320,7 +320,7 @@ function FormLineaBase({ clave, base, onGuardado }: { clave: Clave; base?: Linea
         <label className="etiqueta" htmlFor="lb-fuente">
           Fuente
         </label>
-        <input id="lb-fuente" className="campo" placeholder="Ej. Supervisor de tienda: 3 a 6 h si hay en almacén (Tabla 6, punto 10)" value={fuente} onChange={(e) => setFuente(e.target.value)} />
+        <input id="lb-fuente" className="campo" placeholder="Ej. Medición inicial del supervisor de tienda (3 a 6 h)" value={fuente} onChange={(e) => setFuente(e.target.value)} />
       </div>
       <button className="btn-principal" disabled={enviando}>
         Guardar línea base
@@ -331,7 +331,7 @@ function FormLineaBase({ clave, base, onGuardado }: { clave: Clave; base?: Linea
         </div>
       )}
       <p className="text-xs text-suave sm:col-span-2 lg:col-span-5">
-        Cada cambio queda registrado con fecha y usuario. Si no se midió antes del Sprint 2, usa la primera semana de uso del sistema y anótalo en la fuente (RN-19).
+        Cada cambio queda registrado con fecha y usuario en el historial de líneas base.
       </p>
     </form>
   );

@@ -116,8 +116,13 @@ create or replace function public._alerta(p_prod uuid, p_tipo text, p_cond boole
 returns void language plpgsql security definer set search_path = public as $$
 begin
   if p_cond then
-    update public.alertas set nivel = p_nivel, actualizado_en = now()
-     where producto_id = p_prod and tipo = p_tipo and estado <> 'cerrado' and nivel <> p_nivel;
+    -- Si tras un ingreso o reposición parcial el stock sigue bajo el mínimo, vuelve a «pendiente» para seguir siendo accionable.
+    update public.alertas
+       set nivel = p_nivel,
+           estado = case when estado = 'repuesto' then 'pendiente' else estado end,
+           actualizado_en = now()
+     where producto_id = p_prod and tipo = p_tipo and estado <> 'cerrado'
+       and (nivel <> p_nivel or estado = 'repuesto');
     insert into public.alertas (producto_id, tipo, nivel) values (p_prod, p_tipo, p_nivel)
     on conflict do nothing;
   else
@@ -304,9 +309,9 @@ begin
     raise exception 'Tu rol no puede reponer la percha.' using errcode = '42501';
   end if;
   update public.alertas
-     set estado = case when estado = 'pendiente' then 'en_reposicion' else estado end,
+     set estado = case when estado in ('pendiente', 'repuesto') then 'en_reposicion' else estado end,
          tomada_por = coalesce(tomada_por, auth.uid()), tomada_en = coalesce(tomada_en, now()), actualizado_en = now()
-   where id = p_alerta and tipo = 'percha' and estado in ('pendiente', 'en_reposicion')
+   where id = p_alerta and tipo = 'percha' and estado in ('pendiente', 'en_reposicion', 'repuesto')
    returning producto_id into v_prod;
   if v_prod is null then
     raise exception 'Esta alerta ya fue atendida. Actualiza la lista.';
@@ -427,46 +432,68 @@ begin
 end $$;
 
 -- ---------------------------------------------------------------------
--- RF-16: reposición de percha (traslado del almacén a la percha, RN-12)
+-- RF-16: reposición de percha (traslado del almacén a la percha, RN-12, reparto FEFO multilote)
 -- ---------------------------------------------------------------------
 create or replace function public.registrar_reposicion(p_producto uuid, p_lote uuid, p_cantidad int)
 returns uuid
 language plpgsql security definer set search_path = public as $$
 declare
-  v_prod public.productos%rowtype;
-  v_lote public.lotes%rowtype;
-  v_hay  int;
-  v_mov  uuid;
+  v_prod  public.productos%rowtype;
+  v_lote  public.lotes%rowtype;
+  v_total int;
+  v_rest  int := p_cantidad;
+  v_tom   int;
+  v_mov   uuid;
+  r       record;
 begin
   if public.rol_actual() is distinct from 'administrador' and public.rol_actual() is distinct from 'reponedor' then
     raise exception 'Tu rol no puede registrar reposiciones.' using errcode = '42501';
   end if;
   select * into v_prod from public.productos where id = p_producto and activo;
   if not found then raise exception 'Elige un producto activo.'; end if;
-  select * into v_lote from public.lotes where id = p_lote and producto_id = p_producto;
-  if not found then raise exception 'Elige un lote de %.', v_prod.nombre; end if;
-  if not public.lote_vigente(v_lote.fecha_vencimiento) then
-    raise exception 'El lote % venció el %; no se puede poner en percha. Regístralo como salida por vencimiento.',
-      v_lote.codigo_lote, to_char(v_lote.fecha_vencimiento, 'DD/MM/YYYY');
-  end if;
   if p_cantidad is null or p_cantidad <= 0 then
     raise exception 'La cantidad debe ser un número entero mayor que 0.';
   end if;
-  select coalesce(cantidad, 0) into v_hay from public.existencias where lote_id = p_lote and ubicacion = 'almacen';
-  if coalesce(v_hay, 0) < p_cantidad then
-    raise exception 'El lote % tiene % en almacén; no puedes trasladar %. Corrige la cantidad.', v_lote.codigo_lote, coalesce(v_hay, 0), p_cantidad;
+
+  if p_lote is not null then
+    select * into v_lote from public.lotes where id = p_lote and producto_id = p_producto;
+    if not found then raise exception 'Elige un lote de %.', v_prod.nombre; end if;
+    if not public.lote_vigente(v_lote.fecha_vencimiento) then
+      raise exception 'El lote % venció el %; no se puede poner en percha. Regístralo como salida por vencimiento.',
+        v_lote.codigo_lote, to_char(v_lote.fecha_vencimiento, 'DD/MM/YYYY');
+    end if;
+  end if;
+
+  select coalesce(sum(x.cantidad), 0) into v_total
+    from public.existencias x join public.lotes l on l.id = x.lote_id
+   where l.producto_id = p_producto and x.ubicacion = 'almacen' and public.lote_vigente(l.fecha_vencimiento);
+
+  if v_total < p_cantidad then
+    raise exception 'El almacén tiene % disponibles de %; no puedes trasladar %. Corrige la cantidad.',
+      v_total, v_prod.nombre, p_cantidad;
   end if;
 
   insert into public.movimientos (tipo, detalle, usuario_id)
-  values ('reposicion', 'Almacén ' || v_lote.zona_almacen || ' → percha', auth.uid())
+  values ('reposicion', coalesce('Almacén ' || v_lote.zona_almacen || ' → percha', 'Almacén (FEFO) → percha'), auth.uid())
   returning id into v_mov;
 
   perform public._marcar_repuesto(p_producto, 'percha');
-  perform public._mover(p_lote, 'almacen', -p_cantidad);
-  perform public._mover(p_lote, 'percha', p_cantidad);
 
-  insert into public.movimiento_lineas (movimiento_id, producto_id, lote_id, ubicacion_origen, ubicacion_destino, cantidad)
-  values (v_mov, p_producto, p_lote, 'almacen', 'percha', p_cantidad);
+  for r in
+    select x.lote_id, x.cantidad
+      from public.existencias x join public.lotes l on l.id = x.lote_id
+     where l.producto_id = p_producto and x.ubicacion = 'almacen' and x.cantidad > 0 and public.lote_vigente(l.fecha_vencimiento)
+     order by (p_lote is not null and l.id = p_lote) desc, l.fecha_vencimiento nulls last, l.creado_en
+  loop
+    exit when v_rest = 0;
+    v_tom := least(v_rest, r.cantidad);
+    perform public._mover(r.lote_id, 'almacen', -v_tom);
+    perform public._mover(r.lote_id, 'percha', v_tom);
+    insert into public.movimiento_lineas (movimiento_id, producto_id, lote_id, ubicacion_origen, ubicacion_destino, cantidad)
+    values (v_mov, p_producto, r.lote_id, 'almacen', 'percha', v_tom);
+    v_rest := v_rest - v_tom;
+  end loop;
+
   return v_mov;
 end $$;
 

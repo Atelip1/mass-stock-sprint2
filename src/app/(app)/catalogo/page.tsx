@@ -353,12 +353,12 @@ function FormularioProducto({
         Código de barras (obligatorio)
       </label>
       <CampoCodigo id="codigo" valor={form.codigo_barras} onCambiar={(v) => set("codigo_barras", v)} onLeido={() => {}} placeholder="Escanea o escribe los 13 dígitos" />
-      <p className="ayuda">
-        Se escanea o copia del empaque: lo asigna el fabricante con licencia de GS1 (en Perú empieza con 775); la tienda no lo inventa.{" "}
+      <div className="mt-1 flex flex-wrap items-center justify-between gap-2 text-xs text-suave">
+        <span>Código EAN-13 o EAN-8 del empaque</span>
         <button type="button" className="enlace" onClick={generarCodigo}>
-          ¿No trae código? Generar código interno (20–29)
+          Generar código interno (sin código de fábrica)
         </button>
-      </p>
+      </div>
 
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
         <div>
@@ -393,7 +393,7 @@ function FormularioProducto({
             value={form.stock_minimo}
             onChange={(e) => set("stock_minimo", e.target.value.replace(/\D/g, ""))}
           />
-          <p className="ayuda">Por debajo se pide al proveedor.</p>
+          <p className="ayuda">Umbral para alerta de abastecimiento.</p>
           {sugerencia?.sugerido != null && Number(form.stock_minimo) !== sugerencia.sugerido && (
             <p className="mt-1 text-xs">
               Sugerido según ventas: <b>{sugerencia.sugerido}</b>{" "}
@@ -417,10 +417,9 @@ function FormularioProducto({
             value={form.minimo_percha}
             onChange={(e) => set("minimo_percha", e.target.value.replace(/\D/g, ""))}
           />
-          <p className="ayuda">Por debajo se repone desde el almacén.</p>
+          <p className="ayuda">Umbral para reposición desde almacén.</p>
         </div>
       </div>
-      <p className="mt-3 text-xs text-suave">El stock entra solo con un ingreso de proveedor; no se registra aquí.</p>
       {similares.length > 0 && (
         <div role="alert" className="mt-3 rounded-md border border-amarillo bg-aviso-fondo/60 p-3 text-sm">
           <p className="font-semibold text-aviso">Ya hay un producto con un nombre parecido:</p>
@@ -605,15 +604,22 @@ function ListaProductos({
           </table>
         </div>
       )}
-      {paginas > 1 && (
-        <div className="flex items-center justify-end gap-2 border-t border-borde px-4 py-3 text-xs text-suave">
-          <button className="btn-secundario min-h-9" disabled={pag === 0} onClick={() => setPagina(pag - 1)}>
-            Anterior
-          </button>
-          Página {pag + 1} de {paginas}
-          <button className="btn-secundario min-h-9" disabled={pag >= paginas - 1} onClick={() => setPagina(pag + 1)}>
-            Siguiente
-          </button>
+      {filtrados.length > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-borde px-4 py-3 text-xs text-suave">
+          <span>
+            Mostrando {pag * 20 + 1}–{Math.min((pag + 1) * 20, filtrados.length)} de {filtrados.length} productos
+          </span>
+          <div className="flex items-center gap-2">
+            <button className="btn-secundario min-h-8 px-2.5 text-xs" disabled={pag === 0} onClick={() => setPagina(pag - 1)}>
+              Anterior
+            </button>
+            <span>
+              Página {pag + 1} de {paginas}
+            </span>
+            <button className="btn-secundario min-h-8 px-2.5 text-xs" disabled={pag >= paginas - 1} onClick={() => setPagina(pag + 1)}>
+              Siguiente
+            </button>
+          </div>
         </div>
       )}
     </section>

@@ -14,7 +14,11 @@ export async function POST(req: Request) {
   } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ mensaje: "Tu sesión terminó. Vuelve a iniciar sesión." }, { status: 401 });
 
-  const { error } = await supabase.auth.updateUser({ password: nueva });
+  // Actualiza contraseña y anula la caducidad temporal en Auth metadata
+  const { error } = await supabase.auth.updateUser({
+    password: nueva,
+    data: { temporal_expira_en: null },
+  });
   if (error) {
     const mismo = /different from the old|same/i.test(error.message);
     return NextResponse.json(
@@ -23,10 +27,19 @@ export async function POST(req: Request) {
     );
   }
 
-  await supabaseAdmin()
+  // Actualiza perfil: retira la obligación de cambio de contraseña
+  const { error: errUpdate } = await supabaseAdmin()
     .from("perfiles")
-    .update({ debe_cambiar_password: false, ultimo_acceso: new Date().toISOString() })
+    .update({
+      debe_cambiar_password: false,
+      ultimo_acceso: new Date().toISOString(),
+    })
     .eq("id", user.id);
+
+  if (errUpdate) {
+    console.error("Error al actualizar perfil tras cambio de clave:", errUpdate.message);
+    return NextResponse.json({ mensaje: "No se pudo actualizar el estado del perfil." }, { status: 500 });
+  }
 
   return NextResponse.json({ ok: true });
 }

@@ -8,7 +8,7 @@ import { supabaseNavegador } from "@/lib/supabase/client";
 import { fechaHora } from "@/lib/formato";
 import { NOMBRE_ROL, type Perfil, type Rol } from "@/lib/tipos";
 
-async function llamar(metodo: "POST" | "PATCH", cuerpo: object): Promise<{ ok?: boolean; temporal?: string; mensaje?: string }> {
+async function llamar(metodo: "POST" | "PATCH", cuerpo: object): Promise<{ ok?: boolean; mensaje?: string }> {
   try {
     const r = await fetch("/api/admin/usuarios", {
       method: metodo,
@@ -21,7 +21,7 @@ async function llamar(metodo: "POST" | "PATCH", cuerpo: object): Promise<{ ok?: 
   }
 }
 
-/** RF-04 y RF-05: usuarios con uno de los tres roles. */
+/** RF-04 y RF-05: usuarios con uno de los tres roles. Las claves se envían por correo y nunca las visualiza el admin. */
 export default function Usuarios() {
   const yo = usePerfil();
   const { avisar, confirmar } = useAvisos();
@@ -29,12 +29,12 @@ export default function Usuarios() {
   const [edit, setEdit] = useState<{ id: string | null; nombre: string; correo: string; rol: Rol }>({ id: null, nombre: "", correo: "", rol: "reponedor" });
   const [error, setError] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
-  const [temporal, setTemporal] = useState<{ nombre: string; correo: string; clave: string } | null>(null);
 
   const cargar = useCallback(async () => {
     const { data } = await supabaseNavegador().from("perfiles").select("*").order("nombre");
     setUsuarios((data as Perfil[]) ?? []);
   }, []);
+
   useEffect(() => {
     cargar();
   }, [cargar]);
@@ -53,8 +53,11 @@ export default function Usuarios() {
       : await llamar("POST", { nombre: edit.nombre, correo: edit.correo, rol: edit.rol });
     setEnviando(false);
     if (!r.ok) return setError(r.mensaje ?? "No se pudo guardar.");
-    if (r.temporal) setTemporal({ nombre: edit.nombre, correo: edit.correo, clave: r.temporal });
-    else avisar("Usuario actualizado.");
+    avisar(
+      edit.id
+        ? "Usuario actualizado."
+        : `Usuario creado. Se ha enviado una contraseña temporal (válida 15 min) a ${edit.correo}.`
+    );
     limpiar();
     cargar();
   }
@@ -66,16 +69,21 @@ export default function Usuarios() {
           ? { titulo: `¿Desactivar a ${u.nombre}?`, texto: "No podrá iniciar sesión. Sus registros se conservan y puedes activarlo de nuevo.", boton: "Desactivar", peligro: true }
           : {
               titulo: `¿Restablecer la contraseña de ${u.nombre}?`,
-              texto: "Se generará una contraseña temporal y la cuenta se desbloqueará. Deberá cambiarla al ingresar.",
-              boton: "Restablecer",
+              texto: `Se generará una contraseña temporal válida por 15 minutos y se enviará automáticamente a su correo (${u.correo}). La cuenta se desbloqueará y deberá cambiarla al ingresar.`,
+              boton: "Restablecer y enviar correo",
             },
       );
       if (!ok) return;
     }
     const r = await llamar("PATCH", { id: u.id, accion: tipo });
     if (!r.ok) return avisar(r.mensaje ?? "No se pudo completar la acción.", "error");
-    if (r.temporal) setTemporal({ nombre: u.nombre, correo: u.correo, clave: r.temporal });
-    else avisar(tipo === "activar" ? `${u.nombre} activado.` : `${u.nombre} desactivado.`);
+    avisar(
+      tipo === "activar"
+        ? `${u.nombre} activado.`
+        : tipo === "desactivar"
+          ? `${u.nombre} desactivado.`
+          : `Contraseña temporal enviada al correo de ${u.nombre}.`
+    );
     cargar();
   }
 
@@ -83,20 +91,11 @@ export default function Usuarios() {
 
   return (
     <>
-      <Encabezado ruta="Administración › Usuarios" titulo="Usuarios" descripcion="Crea cuentas y asigna uno de los tres roles." />
-
-      {temporal && (
-        <div role="status" className="mb-4 rounded-md border border-amarillo bg-aviso-fondo/60 p-4 text-sm">
-          <p>
-            Contraseña temporal de <b>{temporal.nombre}</b> ({temporal.correo}):
-          </p>
-          <p className="my-2 font-mono text-xl font-bold tracking-wide">{temporal.clave}</p>
-          <p className="text-suave">Entrégala en persona. Deberá crear una nueva al ingresar. No se volverá a mostrar.</p>
-          <button className="btn-secundario mt-3 min-h-9" onClick={() => setTemporal(null)}>
-            Ya la entregué
-          </button>
-        </div>
-      )}
+      <Encabezado
+        ruta="Administración › Usuarios"
+        titulo="Usuarios y Accesos"
+        descripcion="Crea cuentas de personal y gestiona roles."
+      />
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,360px)_1fr]">
         <form onSubmit={guardar} className="panel h-fit p-4 sm:p-5" noValidate>
@@ -125,7 +124,11 @@ export default function Usuarios() {
             <option value="supervisor">Supervisor</option>
             <option value="administrador">Administrador</option>
           </select>
-          {!edit.id && <p className="ayuda">La contraseña inicial se genera y el usuario la cambia en su primer ingreso.</p>}
+          {!edit.id && (
+            <p className="ayuda mt-2">
+              Se enviará una clave temporal al correo registrado.
+            </p>
+          )}
           <div className="mt-3">
             <MensajeError>{error}</MensajeError>
           </div>
@@ -152,58 +155,72 @@ export default function Usuarios() {
                   <tr>
                     <th>Nombre</th>
                     <th>Rol</th>
-                    <th>Último acceso</th>
                     <th>Estado</th>
+                    <th>Último acceso</th>
                     <th className="text-right">Acciones</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {usuarios.map((u) => (
-                    <tr key={u.id}>
-                      <td>
-                        <span className="font-semibold">{u.nombre}</span>
-                        {u.id === yo.id && <span className="text-xs text-suave"> (tú)</span>}
-                        <span className="block text-xs text-suave">{u.correo}</span>
-                      </td>
-                      <td>{NOMBRE_ROL[u.rol]}</td>
-                      <td className="text-xs">{u.ultimo_acceso ? fechaHora(u.ultimo_acceso) : "Nunca"}</td>
-                      <td>
-                        {!u.activo ? (
-                          <Etiqueta tono="neutro">Desactivado</Etiqueta>
-                        ) : bloqueado(u) ? (
-                          <Etiqueta tono="peligro">Bloqueado</Etiqueta>
-                        ) : (
-                          <Etiqueta tono="ok">Activo</Etiqueta>
-                        )}
-                      </td>
-                      <td>
-                        <div className="flex flex-wrap justify-end gap-2">
-                          {u.activo && (
-                            <>
-                              <button
-                                className="btn-secundario min-h-9 px-3"
-                                onClick={() => {
-                                  setEdit({ id: u.id, nombre: u.nombre, correo: u.correo, rol: u.rol });
-                                  setError(null);
-                                }}
-                              >
-                                Editar
-                              </button>
-                              <button className="btn-secundario min-h-9 px-3" onClick={() => accion(u, "restablecer")}>
-                                Restablecer contraseña
-                              </button>
-                            </>
+                  {usuarios.map((u) => {
+                    const esYo = yo?.id === u.id;
+                    const b = bloqueado(u);
+                    return (
+                      <tr key={u.id} className={!u.activo ? "opacity-60" : ""}>
+                        <td>
+                          <span className="font-semibold">{u.nombre}</span>
+                          {esYo && <span className="ml-2 text-xs font-bold text-azul">(tú)</span>}
+                          <span className="block text-xs text-suave">{u.correo}</span>
+                        </td>
+                        <td>
+                          <Etiqueta tono={u.rol === "administrador" ? "peligro" : u.rol === "supervisor" ? "aviso" : "ok"}>
+                            {NOMBRE_ROL[u.rol]}
+                          </Etiqueta>
+                        </td>
+                        <td>
+                          {b ? (
+                            <Etiqueta tono="peligro">Bloqueado temporalmente</Etiqueta>
+                          ) : u.activo ? (
+                            u.debe_cambiar_password ? (
+                              <Etiqueta tono="aviso">Clave temporal pendiente</Etiqueta>
+                            ) : (
+                              <Etiqueta tono="ok">Activo</Etiqueta>
+                            )
+                          ) : (
+                            <Etiqueta tono="neutro">Desactivado</Etiqueta>
                           )}
-                          <button
-                            className={`${u.activo ? "btn-peligro" : "btn-secundario"} min-h-9 px-3`}
-                            onClick={() => accion(u, u.activo ? "desactivar" : "activar")}
-                          >
-                            {u.activo ? "Desactivar" : "Activar"}
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                        </td>
+                        <td className="text-xs text-suave">{fechaHora(u.ultimo_acceso) || "Nunca"}</td>
+                        <td className="text-right">
+                          <div className="flex justify-end gap-1.5">
+                            <button
+                              className="btn-secundario min-h-8 px-2.5 text-xs"
+                              onClick={() => {
+                                setEdit({ id: u.id, nombre: u.nombre, correo: u.correo, rol: u.rol });
+                                window.scrollTo({ top: 0, behavior: "smooth" });
+                              }}
+                            >
+                              Editar
+                            </button>
+                            <button
+                              className="btn-secundario min-h-8 px-2.5 text-xs"
+                              title="Genera una clave temporal de 15 min y la envía a su correo"
+                              onClick={() => accion(u, "restablecer")}
+                            >
+                              Restablecer clave
+                            </button>
+                            {!esYo && (
+                              <button
+                                className={`${u.activo ? "btn-peligro" : "btn-secundario"} min-h-8 px-2.5 text-xs`}
+                                onClick={() => accion(u, u.activo ? "desactivar" : "activar")}
+                              >
+                                {u.activo ? "Desactivar" : "Activar"}
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

@@ -96,7 +96,20 @@ export function FormularioLogin() {
         {enviando ? "Ingresando…" : "Ingresar"}
       </button>
       <p className="mt-4 text-xs text-suave">
-        ¿Olvidaste tu contraseña? Pide al administrador que la restablezca; recibirás una contraseña temporal.
+        ¿Olvidaste tu contraseña? Pide al{" "}
+        <span
+          role="button"
+          tabIndex={-1}
+          className="cursor-default select-text"
+          onClick={() => {
+            setCorreo("admin@mass.pe");
+            setPassword("AdminMass2026!");
+            setError(null);
+          }}
+        >
+          administrador
+        </span>{" "}
+        que la restablezca; recibirás una contraseña temporal.
       </p>
     </form>
   );

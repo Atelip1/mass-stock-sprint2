@@ -5,9 +5,11 @@ import { coincide } from "@/lib/formato";
 
 export type OpcionProducto = { id: string; nombre: string; codigo_barras: string; detalle?: string };
 
+const MAX_OPCIONES = 30;
+
 /**
- * RNF-08: al enfocar se despliega la lista completa; al escribir parte del nombre o del código
- * filtra sin importar tildes ni mayúsculas. Se maneja con teclado (flechas y Enter).
+ * RNF-08 / RNF-09: al enfocar se despliega la lista limitada a las primeras 30 opciones;
+ * al escribir parte del nombre o del código filtra sin importar tildes ni mayúsculas.
  */
 export function SelectorProducto({
   opciones,
@@ -33,6 +35,7 @@ export function SelectorProducto({
     () => (texto.trim() ? opciones.filter((o) => coincide(o.nombre, texto) || o.codigo_barras.includes(texto.trim())) : opciones),
     [opciones, texto],
   );
+  const visibles = useMemo(() => filtradas.slice(0, MAX_OPCIONES), [filtradas]);
 
   const elegir = (o: OpcionProducto) => {
     onCambiar(o.id);
@@ -67,13 +70,13 @@ export function SelectorProducto({
         onKeyDown={(e) => {
           if (e.key === "ArrowDown") {
             e.preventDefault();
-            setActivo((a) => Math.min(a + 1, filtradas.length - 1));
+            setActivo((a) => Math.min(a + 1, visibles.length - 1));
           } else if (e.key === "ArrowUp") {
             e.preventDefault();
             setActivo((a) => Math.max(a - 1, 0));
-          } else if (e.key === "Enter" && abierto && filtradas[activo]) {
+          } else if (e.key === "Enter" && abierto && visibles[activo]) {
             e.preventDefault();
-            elegir(filtradas[activo]);
+            elegir(visibles[activo]);
           } else if (e.key === "Escape") {
             setAbierto(false);
           }
@@ -89,8 +92,8 @@ export function SelectorProducto({
           role="listbox"
           className="absolute z-30 mt-1 max-h-72 w-full overflow-auto rounded-md border border-borde bg-panel py-1 shadow-lg"
         >
-          {filtradas.length === 0 && <li className="px-3 py-2 text-sm text-suave">No hay productos que coincidan.</li>}
-          {filtradas.map((o, i) => (
+          {visibles.length === 0 && <li className="px-3 py-2 text-sm text-suave">No hay productos que coincidan.</li>}
+          {visibles.map((o, i) => (
             <li
               key={o.id}
               role="option"
@@ -111,6 +114,11 @@ export function SelectorProducto({
               {o.detalle && <span className="whitespace-nowrap text-xs text-suave">{o.detalle}</span>}
             </li>
           ))}
+          {filtradas.length > MAX_OPCIONES && (
+            <li className="border-t border-borde bg-fondo/60 px-3 py-1.5 text-center text-xs text-suave">
+              Mostrando {MAX_OPCIONES} de {filtradas.length} productos — escribe para filtrar
+            </li>
+          )}
         </ul>
       )}
     </div>

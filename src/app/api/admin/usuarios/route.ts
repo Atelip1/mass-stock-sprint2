@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
 import { randomInt } from "node:crypto";
 import { perfilActual, supabaseAdmin } from "@/lib/supabase/server";
+import { enviarCorreoBienvenida, enviarCorreoRestablecimiento } from "@/lib/email";
 import type { Rol } from "@/lib/tipos";
 
 const ROLES: Rol[] = ["administrador", "supervisor", "reponedor"];
 
-/** Contraseña temporal legible para dictarla al usuario (sin 0/O ni 1/l). */
+/** Contraseña temporal legible para dictarla o enviarla (sin 0/O ni 1/l). */
 function contrasenaTemporal() {
   const letras = "abcdefghjkmnpqrstuvwxyz";
   const digitos = "23456789";
@@ -34,7 +35,7 @@ async function adminsActivos(admin: ReturnType<typeof supabaseAdmin>) {
   return count ?? 0;
 }
 
-/** RF-04: crear usuario con uno de los tres roles. Devuelve la contraseña temporal una sola vez. */
+/** RF-04: crear usuario con uno de los tres roles. El admin nunca ve la clave; se envía por correo con validez de 15 min. */
 export async function POST(req: Request) {
   if (!(await exigirAdministrador())) return error("Solo el administrador gestiona usuarios.", 403);
 
@@ -52,10 +53,13 @@ export async function POST(req: Request) {
   if (existente) return error(`El correo ${correo} ya está registrado para ${existente.nombre}.`);
 
   const temporal = contrasenaTemporal();
+  const expiraEn = new Date(Date.now() + 15 * 60_000).toISOString();
+
   const { data: creado, error: e1 } = await admin.auth.admin.createUser({
     email: correo,
     password: temporal,
     email_confirm: true,
+    user_metadata: { temporal_expira_en: expiraEn },
   });
   if (e1 || !creado.user) {
     return error(/already/i.test(e1?.message ?? "") ? `El correo ${correo} ya existe en Supabase Auth.` : "No se pudo crear la cuenta.");
@@ -73,7 +77,16 @@ export async function POST(req: Request) {
     return error("No se pudo guardar el perfil. Inténtalo de nuevo.");
   }
 
-  return NextResponse.json({ ok: true, temporal });
+  // Notificación automática por correo electrónico institucional
+  await enviarCorreoBienvenida({
+    nombre,
+    correo,
+    claveTemporal: temporal,
+    rol,
+    minutosValidez: 15,
+  });
+
+  return NextResponse.json({ ok: true });
 }
 
 /** RF-04 y RF-05: editar, activar, desactivar o restablecer la contraseña de un usuario. */
@@ -118,13 +131,31 @@ export async function PATCH(req: Request) {
     }
     case "restablecer": {
       const temporal = contrasenaTemporal();
-      const { error: e } = await admin.auth.admin.updateUserById(body.id, { password: temporal });
+      const expiraEn = new Date(Date.now() + 15 * 60_000).toISOString();
+      const { error: e } = await admin.auth.admin.updateUserById(body.id, {
+        password: temporal,
+        user_metadata: { temporal_expira_en: expiraEn },
+      });
       if (e) return error("No se pudo restablecer la contraseña.");
+      
       await admin
         .from("perfiles")
-        .update({ debe_cambiar_password: true, intentos_fallidos: 0, bloqueado_hasta: null })
+        .update({
+          debe_cambiar_password: true,
+          intentos_fallidos: 0,
+          bloqueado_hasta: null,
+        })
         .eq("id", body.id);
-      return NextResponse.json({ ok: true, temporal });
+
+      // El admin no ve la clave; se envía directamente al correo del colaborador
+      await enviarCorreoRestablecimiento({
+        nombre: usuario.nombre,
+        correo: usuario.correo,
+        claveTemporal: temporal,
+        minutosValidez: 15,
+      });
+
+      return NextResponse.json({ ok: true });
     }
     default:
       return error("Acción no válida.");

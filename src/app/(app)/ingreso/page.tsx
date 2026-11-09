@@ -35,6 +35,19 @@ const nuevaLinea = (): Linea => ({
   aviso: null,
 });
 
+// Lee proveedor_id de forma segura, aunque FilaStock no declare esa propiedad.
+// La vista v_stock puede devolverla o no, según su definición actual.
+function obtenerProveedorId(producto: FilaStock | null | undefined): string | undefined {
+  if (!producto) return undefined;
+
+  const datos = producto as unknown as Record<string, unknown>;
+  const proveedor = datos["proveedor_id"];
+
+  return typeof proveedor === "string" && proveedor.trim() !== ""
+    ? proveedor
+    : undefined;
+}
+
 /** RF-14, RF-15, RF-22: ingreso de mercadería por guía de remisión, con una o varias líneas. Entra al almacén. */
 export default function RegistrarIngreso() {
   const perfil = usePerfil();
@@ -83,12 +96,21 @@ export default function RegistrarIngreso() {
       return;
     }
     cambiar(clave, { productoId: p.producto_id, codigo, aviso: null });
+    const proveedorProducto = obtenerProveedorId(p);
+    if (!proveedorId && proveedorProducto) setProveedorId(proveedorProducto);
     setTimeout(() => refsCantidad.current.get(clave)?.focus(), 0);
   };
+
+  function maxFechaISO() {
+    const d = new Date();
+    d.setFullYear(d.getFullYear() + 10);
+    return d.toISOString().slice(0, 10);
+  }
 
   function validar(): string | null {
     if (!guia.trim()) return "Escribe el número de la guía de remisión.";
     if (!proveedorId) return "Elige el proveedor de la guía.";
+    const maxVenc = maxFechaISO();
     for (const [i, l] of lineas.entries()) {
       const p = l.productoId ? porId.get(l.productoId) : null;
       const n = `Línea ${i + 1}${p ? ` (${p.nombre})` : ""}`;
@@ -97,6 +119,7 @@ export default function RegistrarIngreso() {
       if (!l.lote.trim()) return `${n}: escribe el lote que figura en el empaque.`;
       if (p.controla_vencimiento && !l.vencimiento) return `${n}: este producto controla vencimiento; escribe la fecha del empaque.`;
       if (l.vencimiento && l.vencimiento < hoyISO()) return `${n}: la fecha de vencimiento ya pasó; no se puede ingresar un lote vencido.`;
+      if (l.vencimiento && l.vencimiento > maxVenc) return `${n}: la fecha de vencimiento supera el máximo permitido (10 años). Verifica el año.`;
       if (!l.zona) return `${n}: elige la zona del almacén.`;
     }
     return null;
@@ -122,7 +145,7 @@ export default function RegistrarIngreso() {
     setEnviando(false);
     if (err) return setError(mensajeError(err));
     const unidades = lineas.reduce((s, l) => s + Number(l.cantidad), 0);
-    avisar(`Ingreso registrado: ${lineas.length} ${lineas.length === 1 ? "producto" : "productos"}, ${unidades} unidades al almacén.`);
+    avisar(`Ingreso registrado: ${lineas.length} ${lineas.length === 1 ? "línea" : "líneas"}, ${unidades} unidades al almacén.`);
     setGuia("");
     setProveedorId("");
     setLineas([nuevaLinea()]);
@@ -136,7 +159,7 @@ export default function RegistrarIngreso() {
       <Encabezado
         ruta="Operación › Registrar ingreso"
         titulo="Registrar ingreso"
-        descripcion="Mercadería recibida del proveedor. Entra al almacén con su lote y vencimiento."
+        descripcion="Recepción de mercadería por guía de remisión con lote, vencimiento y zona de almacén."
       />
       <AvisoSinConexion />
 
@@ -172,9 +195,9 @@ export default function RegistrarIngreso() {
         </div>
 
         <div className="mt-5 flex items-baseline justify-between">
-          <h2 className="text-base font-bold">Productos de la guía</h2>
+          <h2 className="text-base font-bold">Líneas de la guía</h2>
           <span className="text-xs text-suave">
-            {lineas.length} {lineas.length === 1 ? "producto" : "productos"} · {totalUnidades} unidades
+            {lineas.length} {lineas.length === 1 ? "línea" : "líneas"} · {totalUnidades} unidades
           </span>
         </div>
 
@@ -208,7 +231,7 @@ export default function RegistrarIngreso() {
                       onCambiar={(v) => cambiar(l.clave, { codigo: v, aviso: null })}
                       onLeido={(c) => leerCodigo(l.clave, c)}
                     />
-                    {l.aviso ? <p className="mt-1 text-xs font-medium text-peligro">{l.aviso}</p> : <p className="ayuda">Con lectora: haz clic en el campo y escanea; el producto se elige solo.</p>}
+                    {l.aviso && <p className="mt-1 text-xs font-medium text-peligro">{l.aviso}</p>}
                   </div>
                   <div>
                     <label className="etiqueta" htmlFor={`producto-${l.clave}`}>
@@ -221,6 +244,8 @@ export default function RegistrarIngreso() {
                       onCambiar={(id) => {
                         const prod = id ? porId.get(id) : null;
                         cambiar(l.clave, { productoId: id, codigo: prod?.codigo_barras ?? "", aviso: null });
+                        const proveedorProducto = obtenerProveedorId(prod);
+                        if (!proveedorId && proveedorProducto) setProveedorId(proveedorProducto);
                       }}
                     />
                     {p && (
@@ -259,13 +284,14 @@ export default function RegistrarIngreso() {
                   </div>
                   <div>
                     <label className="etiqueta" htmlFor={`venc-${l.clave}`}>
-                      Vencimiento {p && !p.controla_vencimiento && <span className="font-normal text-suave">(opcional para este producto)</span>}
+                      Vencimiento {p && !p.controla_vencimiento && <span className="font-normal text-suave">(opcional)</span>}
                     </label>
                     <input
                       id={`venc-${l.clave}`}
                       className="campo"
                       type="date"
                       min={hoyISO()}
+                      max={maxFechaISO()}
                       value={l.vencimiento}
                       onChange={(e) => cambiar(l.clave, { vencimiento: e.target.value })}
                     />
@@ -294,24 +320,23 @@ export default function RegistrarIngreso() {
           className="btn-secundario mt-3"
           onClick={() => {
             const nueva = nuevaLinea();
-            // La nueva línea hereda la zona de la anterior: casi siempre se guarda todo junto.
             nueva.zona = lineas.at(-1)?.zona ?? "";
             setLineas((ls) => [...ls, nueva]);
             setTimeout(() => document.getElementById(`codigo-${nueva.clave}`)?.focus(), 0);
           }}
         >
-          + Agregar producto
+          + Agregar otra línea
         </button>
 
         <p className="mt-4 text-xs text-suave">
-          Registra: {perfil.nombre}{ahora && ` · ${fechaHora(ahora)}`} (se toma de la sesión)
+          Registra: {perfil.nombre}{ahora && ` · ${fechaHora(ahora)}`}
         </p>
         <div className="mt-3">
           <MensajeError>{error}</MensajeError>
         </div>
         <div className="mt-4 flex flex-wrap gap-2">
           <button className="btn-principal" disabled={enviando || bloqueado}>
-            {enviando ? "Registrando…" : `Registrar ingreso${lineas.length > 1 ? ` (${lineas.length} productos)` : ""}`}
+            {enviando ? "Registrando…" : `Registrar ingreso${lineas.length > 1 ? ` (${lineas.length} líneas)` : ""}`}
           </button>
           <button
             type="button"

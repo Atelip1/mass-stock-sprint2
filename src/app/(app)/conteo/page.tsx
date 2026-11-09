@@ -73,7 +73,7 @@ export default function ConteoFisico() {
     const p = productos.find((x) => x.codigo_barras === c);
     if (!p) return setAviso(`El código ${c} no está en el catálogo.`);
     setProductoId(p.producto_id);
-    setCodigo("");
+    setCodigo(p.codigo_barras);
     setAviso(null);
     setTimeout(() => document.getElementById("contado")?.focus(), 0);
   };
@@ -93,18 +93,24 @@ export default function ConteoFisico() {
     setEnviando(false);
     if (err) return setError(mensajeError(err));
     const dif = Number(contado) - sistema;
-    avisar(dif === 0 ? "Conteo registrado: coincide con el sistema, no hay ajuste." : `Conteo registrado: diferencia ${dif > 0 ? "+" : ""}${dif}. Queda pendiente de aprobación.`);
+    avisar(
+      dif === 0
+        ? "Conteo registrado: coincide con el sistema, no requiere ajuste."
+        : `Conteo registrado: diferencia ${dif > 0 ? "+" : ""}${dif}. Queda pendiente de aprobación.`,
+    );
     setProductoId(null);
+    setCodigo("");
     setContado("");
     cargar();
   }
 
   const pendientes = (ajustes ?? []).filter((a) => a.estado === "pendiente");
-  const resueltos = (ajustes ?? []).filter((a) => a.estado !== "pendiente").slice(0, 10);
+  const resueltos = (ajustes ?? []).filter((a) => a.estado !== "pendiente");
+  const difActual = contado !== "" ? Number(contado) - sistema : 0;
 
   return (
     <>
-      <Encabezado ruta="Operación › Conteo físico" titulo="Conteo físico" descripcion="Compara lo que hay en la tienda con el sistema. Los ajustes se aplican solo cuando se aprueban." />
+      <Encabezado ruta="Operación › Conteo físico" titulo="Conteo físico" descripcion="Verificación de inventario físico frente al stock registrado en el sistema." />
       <AvisoSinConexion />
 
       {registra && (
@@ -116,7 +122,7 @@ export default function ConteoFisico() {
                 Código de barras
               </label>
               <CampoCodigo id="codigo" valor={codigo} onCambiar={(v) => { setCodigo(v); setAviso(null); }} onLeido={leer} />
-              {aviso ? <p className="mt-1 text-xs font-medium text-peligro">{aviso}</p> : <p className="ayuda">Con lectora: haz clic en el campo y escanea; el producto se elige solo.</p>}
+              {aviso && <p className="mt-1 text-xs font-medium text-peligro">{aviso}</p>}
             </div>
             <div>
               <label className="etiqueta" htmlFor="producto">
@@ -125,35 +131,46 @@ export default function ConteoFisico() {
               <SelectorProducto
                 id="producto"
                 valor={productoId}
-                onCambiar={setProductoId}
-                opciones={productos.map((p) => ({ id: p.producto_id, nombre: p.nombre, codigo_barras: p.codigo_barras }))}
+                onCambiar={(id) => {
+                  setProductoId(id);
+                  const prod = productos.find((p) => p.producto_id === id);
+                  setCodigo(prod?.codigo_barras ?? "");
+                  setAviso(null);
+                }}
+                opciones={productos.map((p) => ({ id: p.producto_id, nombre: p.nombre, codigo_barras: p.codigo_barras, detalle: `percha ${p.percha} · almacén ${p.almacen}` }))}
               />
             </div>
             <div>
               <label className="etiqueta" htmlFor="ubicacion">
-                Ubicación
+                Ubicación contada
               </label>
               <select id="ubicacion" className="campo" value={ubicacion} onChange={(e) => setUbicacion(e.target.value as "almacen" | "percha")}>
-                <option value="percha">Percha</option>
-                <option value="almacen">Almacén</option>
+                <option value="percha">Percha (góndola)</option>
+                <option value="almacen">Almacén (trastienda)</option>
               </select>
             </div>
             <div>
               <label className="etiqueta" htmlFor="contado">
-                Unidades contadas
+                Unidades físicas contadas
               </label>
               <input id="contado" className="campo" inputMode="numeric" value={contado} onChange={(e) => setContado(e.target.value.replace(/\D/g, "").slice(0, 6))} />
             </div>
-            <div>
+            <div className="md:col-span-2">
               <label className="etiqueta" htmlFor="sistema">
-                Según el sistema
+                Según el sistema ({UBIC[ubicacion].toLowerCase()})
               </label>
-              <input id="sistema" className="campo" disabled value={productoId ? String(sistema) : ""} />
-              {productoId && contado !== "" && (
-                <p className={`mt-1 text-xs font-semibold ${Number(contado) === sistema ? "text-ok" : "text-aviso"}`}>
-                  {Number(contado) === sistema ? "Coincide con el sistema." : `Diferencia: ${Number(contado) - sistema > 0 ? "+" : ""}${Number(contado) - sistema}`}
-                </p>
-              )}
+              <div className="flex flex-wrap items-center gap-3">
+                <input id="sistema" className="campo w-32" disabled value={productoId ? String(sistema) : ""} />
+                {productoId && contado !== "" && (
+                  <p className={`text-sm font-semibold ${difActual === 0 ? "text-ok" : difActual < 0 ? "text-peligro" : "text-aviso"}`}>
+                    {difActual === 0
+                      ? "✓ Coincide exactamente con el sistema (sin diferencia)."
+                      : difActual < 0
+                        ? `Diferencia: ${difActual} (${Math.abs(difActual) === 1 ? "Falta 1 unidad física" : `Faltan ${Math.abs(difActual)} unidades físicas`})`
+                        : `Diferencia: +${difActual} (${difActual === 1 ? "Sobra 1 unidad física" : `Sobran ${difActual} unidades físicas`})`}
+                  </p>
+                )}
+              </div>
             </div>
           </div>
           <div className="mt-3">
@@ -190,6 +207,7 @@ export default function ConteoFisico() {
               <tbody>
                 {pendientes.map((a) => {
                   const propio = a.registrado_por === perfil.id;
+                  const bloqueadoPorSegregacion = propio && perfil.rol !== "administrador";
                   return (
                     <tr key={a.id}>
                       <td className="font-semibold">{a.producto?.nombre}</td>
@@ -197,8 +215,10 @@ export default function ConteoFisico() {
                       <td className="text-right">{a.sistema}</td>
                       <td className="text-right">{a.contado}</td>
                       <td className={`text-right font-bold ${a.diferencia < 0 ? "text-peligro" : "text-ok"}`}>
-                        {a.diferencia > 0 ? "+" : ""}
-                        {a.diferencia}
+                        {a.diferencia > 0 ? `+${a.diferencia}` : a.diferencia}{" "}
+                        <span className="text-xs font-normal text-suave">
+                          ({a.diferencia < 0 ? `faltan ${Math.abs(a.diferencia)}` : `sobran ${a.diferencia}`})
+                        </span>
                       </td>
                       <td>
                         {a.registro?.nombre}
@@ -206,16 +226,23 @@ export default function ConteoFisico() {
                       </td>
                       {aprueba && (
                         <td className="text-right">
-                          {propio ? (
-                            <span className="text-xs text-suave">Lo registraste tú; lo aprueba otra persona.</span>
+                          {bloqueadoPorSegregacion ? (
+                            <span className="text-xs text-suave">Registrado por ti; requiere aprobación de otro supervisor o administrador.</span>
                           ) : (
-                            <div className="flex justify-end gap-2">
-                              <button className="btn-principal min-h-9 px-3" onClick={() => setResolver({ ajuste: a, aprobar: true })}>
-                                Aprobar
-                              </button>
-                              <button className="btn-secundario min-h-9 px-3" onClick={() => setResolver({ ajuste: a, aprobar: false })}>
-                                Rechazar
-                              </button>
+                            <div className="flex flex-col items-end gap-1">
+                              <div className="flex justify-end gap-2">
+                                <button className="btn-principal min-h-9 px-3" onClick={() => setResolver({ ajuste: a, aprobar: true })}>
+                                  Aprobar
+                                </button>
+                                <button className="btn-secundario min-h-9 px-3" onClick={() => setResolver({ ajuste: a, aprobar: false })}>
+                                  Rechazar
+                                </button>
+                              </div>
+                              {propio && (
+                                <span className="text-[11px] text-suave">
+                                  Conteo propio (si la BD exige otro aprobador, usa otra cuenta de supervisor/admin)
+                                </span>
+                              )}
                             </div>
                           )}
                         </td>

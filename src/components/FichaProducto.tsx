@@ -96,7 +96,8 @@ function Ficha({ productoId, onCerrar }: { productoId: string; onCerrar: () => v
     return () => window.removeEventListener("keydown", esc);
   }, [onCerrar]);
 
-  const faltan = fila ? Math.max(0, fila.minimo_percha - fila.percha + 1) : 0;
+  const faltanPercha = fila ? Math.max(0, fila.minimo_percha - fila.percha) : 0;
+  const faltanStock = fila ? Math.max(0, fila.stock_minimo - fila.total) : 0;
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-black/30" onClick={onCerrar}>
@@ -112,6 +113,7 @@ function Ficha({ productoId, onCerrar }: { productoId: string; onCerrar: () => v
             {fila && (
               <p className="text-xs text-suave">
                 Código de barras <span className="font-mono">{fila.codigo_barras}</span> · {fila.categoria} · {fila.unidad}
+                {fila.proveedor && <span> · Proveedor: <b className="text-texto">{fila.proveedor}</b></span>}
               </p>
             )}
           </div>
@@ -127,7 +129,15 @@ function Ficha({ productoId, onCerrar }: { productoId: string; onCerrar: () => v
         {fila && (
           <>
             <div className="mt-4 grid grid-cols-3 gap-2">
-              <div className={`rounded-md border p-3 ${fila.estado_percha === "ok" ? "border-borde" : "border-amarillo bg-aviso-fondo/50"}`}>
+              <div
+                className={`rounded-md border p-3 ${
+                  fila.estado_percha === "ok"
+                    ? "border-borde"
+                    : fila.estado_percha === "por_reponer"
+                      ? "border-amarillo bg-aviso-fondo/50"
+                      : "border-rojo bg-peligro-fondo/40"
+                }`}
+              >
                 <p className="text-xs text-suave">En percha</p>
                 <p className="text-2xl font-bold">
                   {fila.percha} <span className="text-xs font-normal text-suave">de {fila.minimo_percha} mín.</span>
@@ -139,7 +149,15 @@ function Ficha({ productoId, onCerrar }: { productoId: string; onCerrar: () => v
                 <p className="text-2xl font-bold">{fila.almacen}</p>
                 <p className="text-xs text-suave">disponibles para reponer</p>
               </div>
-              <div className="rounded-md border border-borde p-3">
+              <div
+                className={`rounded-md border p-3 ${
+                  fila.estado_stock === "ok"
+                    ? "border-borde"
+                    : fila.estado_stock === "bajo_minimo"
+                      ? "border-amarillo bg-aviso-fondo/50"
+                      : "border-rojo bg-peligro-fondo/40"
+                }`}
+              >
                 <p className="text-xs text-suave">Stock total</p>
                 <p className="text-2xl font-bold">
                   {fila.total} <span className="text-xs font-normal text-suave">mín. {fila.stock_minimo}</span>
@@ -149,8 +167,15 @@ function Ficha({ productoId, onCerrar }: { productoId: string; onCerrar: () => v
             </div>
             <p className="mt-3 text-sm text-suave">
               {fila.estado_percha === "ok"
-                ? `La percha está cubierta (${fila.percha} de ${fila.minimo_percha} unidades mínimas).`
-                : `La percha tiene ${fila.percha} de las ${fila.minimo_percha} unidades mínimas: faltan ${faltan} para cubrirla. Hay ${fila.almacen} en almacén.`}
+                ? `Percha cubierta (${fila.percha} de ${fila.minimo_percha} mín.).`
+                : faltanPercha > 0
+                  ? `Percha con ${fila.percha} de ${fila.minimo_percha} mín. (faltan ${faltanPercha} para el mínimo).`
+                  : `Percha en el límite mínimo (${fila.percha} de ${fila.minimo_percha}).`}{" "}
+              {fila.estado_stock === "ok"
+                ? `Stock total sobre el mínimo (${fila.total} de ${fila.stock_minimo}).`
+                : faltanStock > 0
+                  ? `Stock total bajo mínimo: faltan ${faltanStock} u. para alcanzar ${fila.stock_minimo}.`
+                  : `Stock total en el límite mínimo (${fila.total} de ${fila.stock_minimo}).`}
             </p>
           </>
         )}
@@ -171,9 +196,9 @@ function Ficha({ productoId, onCerrar }: { productoId: string; onCerrar: () => v
           </ul>
         )}
 
-        <h3 className="mt-6 text-sm font-bold">Lotes vigentes</h3>
+        <h3 className="mt-6 text-sm font-bold">Existencias por lote</h3>
         {lotes.length === 0 ? (
-          <p className="mt-2 text-sm text-suave">No hay lotes con unidades.</p>
+          <p className="mt-2 text-sm text-suave">No hay lotes con unidades en almacén ni en percha.</p>
         ) : (
           <div className="mt-2 overflow-x-auto">
             <table className="tabla">
@@ -209,7 +234,12 @@ function Ficha({ productoId, onCerrar }: { productoId: string; onCerrar: () => v
           </div>
         )}
 
-        <h3 className="mt-6 text-sm font-bold">Últimos movimientos</h3>
+        <div className="mt-6 flex items-baseline justify-between gap-2">
+          <h3 className="text-sm font-bold">Últimos 5 movimientos</h3>
+          <a href="/historial" onClick={onCerrar} className="enlace text-xs">
+            Ver todos en Historial →
+          </a>
+        </div>
         {movs.length === 0 ? (
           <p className="mt-2 text-sm text-suave">Sin movimientos registrados.</p>
         ) : (

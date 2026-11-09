@@ -65,7 +65,7 @@ export default function Parametros() {
           >
             <h2 className="text-base font-bold">{n.titulo}</h2>
             <p className="text-xs text-suave">
-              {desc(n.clave)?.includes(n.regla) ? desc(n.clave) : `${desc(n.clave) ?? ""} (${n.regla})`}
+              {(desc(n.clave) ?? "").replace(/\s*\((?:RN|RF)-\d+\)/g, "")}
             </p>
             <div className="mt-3 flex items-center gap-2">
               <input
@@ -88,7 +88,7 @@ export default function Parametros() {
 
         <section className="panel p-4 sm:p-5 md:col-span-2">
           <h2 className="text-base font-bold">Zonas del almacén</h2>
-          <p className="text-xs text-suave">Se eligen al registrar cada ingreso (RF-15). Quitar una zona no cambia los lotes que ya están en ella.</p>
+          <p className="text-xs text-suave">Se eligen al registrar cada ingreso de mercadería. Quitar una zona no afecta a los lotes que ya están ubicados en ella.</p>
           <ul className="mt-3 flex flex-wrap gap-2">
             {zonas.map((z) => (
               <li key={z} className="flex items-center gap-1 rounded-full border border-borde bg-fondo py-1 pl-3 pr-1 text-sm font-semibold">

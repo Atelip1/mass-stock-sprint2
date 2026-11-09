@@ -20,10 +20,12 @@ import {
   Vacio,
 } from "@/components/ui";
 import { supabaseNavegador } from "@/lib/supabase/client";
-import { fechaHora, hoyISO, mensajeError } from "@/lib/formato";
+import { coincide, fechaHora, hoyISO, mensajeError } from "@/lib/formato";
 import { descargarCSV, numCSV } from "@/lib/csv";
 import { NADA, useDatos } from "@/lib/datos";
 import type { AlertaActiva, EstadoAlerta } from "@/lib/tipos";
+
+const POR_PAGINA = 20;
 
 type Seguimiento = {
   id: string;
@@ -55,53 +57,95 @@ export default function Reposicion() {
     alertasQ.recargar();
     seguimientoQ.recargar();
   };
+
+  // Filtros y paginación en la pestaña Alertas
+  const [busqueda, setBusqueda] = useState("");
+  const [filtroTipo, setFiltroTipo] = useState<"todos" | "abastecimiento" | "percha">("todos");
+  const [filtroNivel, setFiltroNivel] = useState("todos");
+  const [pagina, setPagina] = useState(0);
+
   const [filtroEstado, setFiltroEstado] = useState<EstadoAlerta | null>(null);
   const [sel, setSel] = useState<Set<string>>(new Set());
   // RF-29: la campana abre esta pantalla con ?alerta=… para mostrar el detalle de esa alerta.
   const [resaltada, setResaltada] = useState<string | null>(null);
+
+  const alertasFiltradas = useMemo(() => {
+    if (!alertas) return [];
+    return alertas.filter((a) => {
+      if (filtroTipo !== "todos" && a.tipo !== filtroTipo) return false;
+      if (filtroNivel !== "todos" && a.nivel !== filtroNivel) return false;
+      if (busqueda.trim() && !coincide(a.nombre, busqueda) && !a.codigo_barras.includes(busqueda.trim())) return false;
+      return true;
+    });
+  }, [alertas, filtroTipo, filtroNivel, busqueda]);
+
+  const totalPaginas = Math.max(1, Math.ceil(alertasFiltradas.length / POR_PAGINA));
+  const paginaActual = Math.min(pagina, totalPaginas - 1);
+  const alertasPagina = useMemo(
+    () => alertasFiltradas.slice(paginaActual * POR_PAGINA, (paginaActual + 1) * POR_PAGINA),
+    [alertasFiltradas, paginaActual],
+  );
+
   useEffect(() => {
     const id = new URLSearchParams(window.location.search).get("alerta");
     if (id) setResaltada(id);
   }, []);
+
   useEffect(() => {
-    if (!resaltada || !alertas) return;
-    const fila = document.getElementById(`alerta-${resaltada}`);
-    if (fila) {
-      setVista("alertas");
-      fila.scrollIntoView({ block: "center" });
+    if (!resaltada || !alertasFiltradas.length) return;
+    const idx = alertasFiltradas.findIndex((a) => a.id === resaltada);
+    if (idx >= 0) {
+      const pagDestino = Math.floor(idx / POR_PAGINA);
+      if (pagDestino !== paginaActual) setPagina(pagDestino);
     }
-  }, [resaltada, alertas]);
+    setTimeout(() => {
+      const fila = document.getElementById(`alerta-${resaltada}`);
+      if (fila) {
+        setVista("alertas");
+        fila.scrollIntoView({ block: "center" });
+      }
+    }, 50);
+  }, [resaltada, alertasFiltradas, paginaActual]);
+
   const [error, setError] = useState<string | null>(null);
   const [trabajando, setTrabajando] = useState(false);
 
-  // Qué puede hacer este usuario con cada alerta (RF-25, RN-08).
+  // Qué puede hacer este usuario con cada alerta (incluyendo alertas con ingreso parcial que siguen bajo el mínimo).
   const accionable = (a: AlertaActiva) =>
-    a.tipo === "abastecimiento" ? esAdmin && a.estado === "pendiente" : repone && !a.almacen_vacio && a.estado !== "repuesto";
+    a.tipo === "abastecimiento"
+      ? esAdmin && (a.estado === "pendiente" || a.estado === "repuesto")
+      : repone && !a.almacen_vacio;
 
   const seleccionadas = useMemo(() => (alertas ?? []).filter((a) => sel.has(a.id)), [alertas, sel]);
   const selAbast = seleccionadas.filter((a) => a.tipo === "abastecimiento");
   const selPercha = seleccionadas.filter((a) => a.tipo === "percha");
 
-  async function solicitar(lista: AlertaActiva[]) {
+  async function solicitar(lista: AlertaActiva[], exportarCsv = true) {
     setTrabajando(true);
     setError(null);
     const { data, error: err } = await supabaseNavegador().rpc("solicitar_proveedor", { p_alertas: lista.map((a) => a.id) });
     setTrabajando(false);
     if (err) return setError(mensajeError(err));
     const filas = (data as { proveedor: string; ruc: string; codigo_barras: string; producto: string; unidad: string; cantidad: number }[]) ?? [];
-    descargarCSV(
-      `pedido-proveedor-${hoyISO()}`,
-      ["Proveedor", "RUC", "Código de barras", "Producto", "Unidad", "Cantidad sugerida"],
-      filas.map((f) => [f.proveedor, f.ruc, f.codigo_barras, f.producto, f.unidad, f.cantidad]),
-    );
-    avisar(`Solicitud registrada para ${filas.length} ${filas.length === 1 ? "producto" : "productos"}; se descargó la lista de pedido.`);
+    if (exportarCsv) {
+      descargarCSV(
+        `pedido-proveedor-${hoyISO()}`,
+        ["Proveedor", "RUC", "Código de barras", "Producto", "Unidad", "Cantidad sugerida"],
+        filas.map((f) => [f.proveedor, f.ruc, f.codigo_barras, f.producto, f.unidad, f.cantidad]),
+      );
+      avisar(`Solicitud registrada para ${filas.length} ${filas.length === 1 ? "producto" : "productos"}; se descargó la lista de pedido.`);
+    } else {
+      avisar(`Solicitud registrada para ${filas[0]?.producto ?? "el producto"}. Puedes exportar el pedido completo en «Solicitudes al proveedor».`);
+    }
     setSel(new Set());
     recargar();
   }
 
   async function reponer(a: AlertaActiva) {
-    const { error: err } = await supabaseNavegador().rpc("tomar_alerta", { p_alerta: a.id });
-    if (err) return setError(mensajeError(err));
+    if (a.estado !== "repuesto") {
+      const { error: err } = await supabaseNavegador().rpc("tomar_alerta", { p_alerta: a.id });
+      if (err) return setError(mensajeError(err));
+    }
     router.push(`/reponer?producto=${a.producto_id}`);
   }
 
@@ -149,89 +193,205 @@ export default function Reposicion() {
             <Vacio>No hay alertas activas: todo el stock y todas las perchas están sobre su mínimo.</Vacio>
           ) : (
             <>
-              <div className="overflow-x-auto">
-                <table className="tabla min-w-[1080px]">
-                  <thead>
-                    <tr>
-                      <th className="w-8">
-                        <span className="sr-only">Elegir</span>
-                      </th>
-                      <th>Producto</th>
-                      <th>Tipo</th>
-                      <th>Nivel</th>
-                      <th className="text-right">Percha</th>
-                      <th className="text-right">Almacén</th>
-                      <th className="text-right">Mínimo</th>
-                      <th className="text-right" title="Días que alcanza el stock al ritmo de venta de los últimos 14 días">
-                        Cobertura
-                      </th>
-                      <th className="text-right">Desde</th>
-                      <th className="text-right">Sugerido</th>
-                      <th>Acción</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {alertas.map((a) => (
-                      <tr key={a.id} id={`alerta-${a.id}`} className={sel.has(a.id) ? "bg-azul-claro/40" : a.id === resaltada ? "bg-aviso-fondo/60 outline outline-2 outline-amarillo" : ""}>
-                        <td>
-                          {accionable(a) && (
-                            <input
-                              type="checkbox"
-                              className="size-4 accent-azul"
-                              aria-label={`Elegir ${a.nombre}`}
-                              checked={sel.has(a.id)}
-                              onChange={(e) =>
-                                setSel((s) => {
-                                  const n = new Set(s);
-                                  if (e.target.checked) n.add(a.id);
-                                  else n.delete(a.id);
-                                  return n;
-                                })
-                              }
-                            />
-                          )}
-                        </td>
-                        <td className="min-w-48">
-                          <button className="enlace text-left" onClick={() => abrir(a.producto_id)}>
-                            {a.nombre}
-                          </button>
-                          <span className="mt-0.5 block text-xs text-suave">
-                            ABC: <EtiquetaClase clase={a.clase} />
-                          </span>
-                        </td>
-                        <td>
-                          <EtiquetaTipoAlerta tipo={a.tipo} />
-                        </td>
-                        <td>
-                          <EtiquetaNivel nivel={a.nivel} />
-                        </td>
-                        <td className="text-right">{a.percha}</td>
-                        <td className="text-right">{a.almacen}</td>
-                        <td className="text-right">{a.tipo === "percha" ? a.minimo_percha : a.stock_minimo}</td>
-                        <td className="text-right">{a.cobertura_dias === null ? "—" : `${String(a.cobertura_dias).replace(".", ",")} d`}</td>
-                        <td className="text-right whitespace-nowrap">{duracion(a.horas)}</td>
-                        <td className="text-right font-semibold">{a.sugerido}</td>
-                        <td>
-                          <Accion a={a} esAdmin={esAdmin} repone={repone} bloqueado={bloqueado} onSolicitar={() => solicitar([a])} onReponer={() => reponer(a)} />
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              <div className="flex flex-wrap items-end gap-3 border-b border-borde p-4">
+                <div className="min-w-56 flex-1">
+                  <label className="etiqueta" htmlFor="al-buscar">
+                    Buscar producto
+                  </label>
+                  <input
+                    id="al-buscar"
+                    className="campo"
+                    placeholder="Nombre o código de barras…"
+                    value={busqueda}
+                    onChange={(e) => {
+                      setBusqueda(e.target.value);
+                      setPagina(0);
+                    }}
+                  />
+                </div>
+                <div>
+                  <label className="etiqueta" htmlFor="al-tipo">
+                    Tipo de alerta
+                  </label>
+                  <select
+                    id="al-tipo"
+                    className="campo"
+                    value={filtroTipo}
+                    onChange={(e) => {
+                      setFiltroTipo(e.target.value as typeof filtroTipo);
+                      setPagina(0);
+                    }}
+                  >
+                    <option value="todos">Todos ({alertas.length})</option>
+                    <option value="abastecimiento">Abastecimiento ({alertas.filter((a) => a.tipo === "abastecimiento").length})</option>
+                    <option value="percha">Percha ({alertas.filter((a) => a.tipo === "percha").length})</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="etiqueta" htmlFor="al-nivel">
+                    Nivel
+                  </label>
+                  <select
+                    id="al-nivel"
+                    className="campo"
+                    value={filtroNivel}
+                    onChange={(e) => {
+                      setFiltroNivel(e.target.value);
+                      setPagina(0);
+                    }}
+                  >
+                    <option value="todos">Todos</option>
+                    <option value="sin_stock">Sin stock</option>
+                    <option value="critica">Crítica</option>
+                    <option value="preventiva">Preventiva</option>
+                    <option value="vacia">Percha vacía</option>
+                    <option value="por_reponer">Por reponer</option>
+                  </select>
+                </div>
               </div>
+
+              {alertasFiltradas.length === 0 ? (
+                <Vacio>No hay alertas que coincidan con el filtro aplicado.</Vacio>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="tabla min-w-[1000px]">
+                    <thead>
+                      <tr>
+                        <th className="w-8">
+                          <span className="sr-only">Elegir</span>
+                        </th>
+                        <th>Producto</th>
+                        <th>Tipo</th>
+                        <th>Nivel</th>
+                        <th className="text-right">Percha</th>
+                        <th className="text-right">Almacén</th>
+                        <th className="text-right">Mínimo</th>
+                        <th className="text-right" title="Días estimados que durará el stock al ritmo de venta promedio de los últimos 14 días">
+                          Cobertura ⓘ
+                        </th>
+                        <th className="text-right">Desde</th>
+                        <th className="text-right" title="Cantidad recomendada para llevar el stock o la percha al doble de su mínimo">
+                          Sugerido ⓘ
+                        </th>
+                        <th>Acción</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {alertasPagina.map((a) => (
+                        <tr
+                          key={a.id}
+                          id={`alerta-${a.id}`}
+                          className={
+                            sel.has(a.id)
+                              ? "bg-azul-claro/40"
+                              : a.id === resaltada
+                                ? "bg-aviso-fondo/60 outline outline-2 outline-amarillo"
+                                : ""
+                          }
+                        >
+                          <td>
+                            {accionable(a) && (
+                              <input
+                                type="checkbox"
+                                className="size-4 accent-azul"
+                                aria-label={`Elegir ${a.nombre}`}
+                                checked={sel.has(a.id)}
+                                onChange={(e) =>
+                                  setSel((s) => {
+                                    const n = new Set(s);
+                                    if (e.target.checked) n.add(a.id);
+                                    else n.delete(a.id);
+                                    return n;
+                                  })
+                                }
+                              />
+                            )}
+                          </td>
+                          <td className="min-w-48">
+                            <button className="enlace text-left" onClick={() => abrir(a.producto_id)}>
+                              {a.nombre}
+                            </button>
+                            <span className="mt-0.5 block text-xs text-suave">
+                              ABC: <EtiquetaClase clase={a.clase} />
+                            </span>
+                          </td>
+                          <td>
+                            <EtiquetaTipoAlerta tipo={a.tipo} />
+                          </td>
+                          <td>
+                            <EtiquetaNivel nivel={a.nivel} />
+                          </td>
+                          <td className="text-right">{a.percha}</td>
+                          <td className="text-right">{a.almacen}</td>
+                          <td className="text-right">{a.tipo === "percha" ? a.minimo_percha : a.stock_minimo}</td>
+                          <td className="text-right">{a.cobertura_dias === null ? "—" : `${String(a.cobertura_dias).replace(".", ",")} d`}</td>
+                          <td className="text-right whitespace-nowrap">{duracion(a.horas)}</td>
+                          <td className="text-right font-semibold">{a.sugerido}</td>
+                          <td>
+                            <Accion
+                              a={a}
+                              esAdmin={esAdmin}
+                              repone={repone}
+                              bloqueado={bloqueado}
+                              onSolicitar={() => solicitar([a], false)}
+                              onReponer={() => reponer(a)}
+                            />
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              <div className="flex flex-wrap items-center justify-between gap-3 border-t border-borde px-4 py-3 text-xs text-suave">
+                <span>
+                  Mostrando {alertasFiltradas.length === 0 ? 0 : paginaActual * POR_PAGINA + 1}–
+                  {Math.min((paginaActual + 1) * POR_PAGINA, alertasFiltradas.length)} de {alertasFiltradas.length} alertas
+                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    className="btn-secundario min-h-8 px-2.5 text-xs"
+                    disabled={paginaActual === 0}
+                    onClick={() => setPagina((p) => Math.max(0, p - 1))}
+                  >
+                    Anterior
+                  </button>
+                  <span>
+                    Página {paginaActual + 1} de {totalPaginas}
+                  </span>
+                  <button
+                    className="btn-secundario min-h-8 px-2.5 text-xs"
+                    disabled={paginaActual + 1 >= totalPaginas}
+                    onClick={() => setPagina((p) => Math.min(totalPaginas - 1, p + 1))}
+                  >
+                    Siguiente
+                  </button>
+                </div>
+              </div>
+
               {(esAdmin || repone) && (
                 <div className="flex flex-wrap items-center gap-2 border-t border-borde p-4">
                   {esAdmin && (
                     <button
                       className="btn-secundario"
-                      disabled={bloqueado || (selAbast.length === 0 && !alertas.some((a) => a.tipo === "abastecimiento" && a.estado === "pendiente"))}
+                      disabled={
+                        bloqueado ||
+                        (selAbast.length === 0 &&
+                          !alertas.some((a) => a.tipo === "abastecimiento" && (a.estado === "pendiente" || a.estado === "repuesto")))
+                      }
                       onClick={() =>
-                        solicitar(selAbast.length ? selAbast : alertas.filter((a) => a.tipo === "abastecimiento" && a.estado === "pendiente"))
+                        solicitar(
+                          selAbast.length
+                            ? selAbast
+                            : alertas.filter((a) => a.tipo === "abastecimiento" && (a.estado === "pendiente" || a.estado === "repuesto")),
+                          true,
+                        )
                       }
                     >
                       {selAbast.length
-                        ? `Solicitar ${selAbast.length} al proveedor y exportar lista de pedido`
-                        : "Solicitar todas al proveedor y exportar lista de pedido"}
+                        ? `Solicitar ${selAbast.length} al proveedor y exportar pedido (CSV)`
+                        : "Solicitar pendientes al proveedor y exportar pedido (CSV)"}
                     </button>
                   )}
                   {repone && selPercha.length > 0 && (
@@ -239,12 +399,9 @@ export default function Reposicion() {
                       Tomar {selPercha.length} para reponer
                     </button>
                   )}
-                  <button className="btn-secundario" onClick={() => exportarAlertas(alertas)}>
-                    Exportar CSV
+                  <button className="btn-secundario" onClick={() => exportarAlertas(alertasFiltradas)}>
+                    Exportar alertas (CSV)
                   </button>
-                  <span className="text-xs text-suave">
-                    Sugerido: lleva el stock (o la percha) al doble de su mínimo; en percha no supera lo que hay en almacén.
-                  </span>
                 </div>
               )}
             </>
@@ -353,7 +510,7 @@ type Solicitud = {
   estado_alerta: EstadoAlerta;
 };
 
-/** RF-28: lo que se solicitó al proveedor y la lista de pedido para enviarle. El sistema no gestiona la compra. */
+/** RF-28: lo que se solicitó al proveedor y la lista de pedido para enviarle. */
 function Solicitudes() {
   const [dias, setDias] = useState(7);
   const [proveedor, setProveedor] = useState("todos");
@@ -404,7 +561,7 @@ function Solicitudes() {
             )
           }
         >
-          Exportar lista de pedido
+          Exportar lista de pedido (CSV)
         </button>
       </div>
       <MensajeError>{q.error}</MensajeError>
@@ -450,7 +607,6 @@ function Solicitudes() {
           </table>
         </div>
       )}
-      <p className="border-t border-borde px-4 py-3 text-xs text-suave">El sistema registra lo que se pidió; la compra se hace por el canal de siempre. Al llegar la mercadería, regístrala en «Registrar ingreso».</p>
     </section>
   );
 }
@@ -471,16 +627,25 @@ function Accion({
   onReponer: () => void;
 }) {
   if (a.tipo === "abastecimiento") {
-    if (a.estado === "pendiente" && esAdmin)
+    if ((a.estado === "pendiente" || a.estado === "repuesto") && esAdmin)
       return (
-        <button className="btn-principal min-h-9 whitespace-nowrap px-3" disabled={bloqueado} onClick={onSolicitar}>
-          Solicitar a proveedor
-        </button>
+        <span className="flex flex-col gap-0.5">
+          <button className="btn-principal min-h-9 whitespace-nowrap px-3" disabled={bloqueado} onClick={onSolicitar}>
+            {a.estado === "repuesto" ? "Solicitar faltante" : "Solicitar a proveedor"}
+          </button>
+          {a.estado === "repuesto" && a.responsable && (
+            <span className="text-xs text-aviso">Ingreso parcial de {a.responsable}</span>
+          )}
+        </span>
       );
     return (
       <span className="flex flex-col gap-0.5">
         <EtiquetaEstadoReposicion estado={a.estado} />
-        {a.estado !== "pendiente" && a.responsable && <span className="text-xs text-suave">{a.estado === "en_reposicion" ? "Solicitado por" : "Ingreso de"} {a.responsable}</span>}
+        {a.estado !== "pendiente" && a.responsable && (
+          <span className="text-xs text-suave">
+            {a.estado === "en_reposicion" ? "Solicitado por" : "Ingreso parcial de"} {a.responsable}
+          </span>
+        )}
       </span>
     );
   }
@@ -488,16 +653,17 @@ function Accion({
     return (
       <span className="flex flex-col gap-0.5">
         <Etiqueta tono="peligro">Almacén vacío</Etiqueta>
-        <span className="text-xs text-suave">Se atiende con el abastecimiento</span>
+        <span className="text-xs text-suave">Requiere ingreso de proveedor</span>
       </span>
     );
-  if (repone && a.estado !== "repuesto")
+  if (repone)
     return (
       <span className="flex flex-col gap-0.5">
         <button className="btn-principal min-h-9 whitespace-nowrap px-3" disabled={bloqueado} onClick={onReponer}>
           Reponer percha
         </button>
         {a.estado === "en_reposicion" && a.responsable && <span className="text-xs text-suave">Tomada por {a.responsable}</span>}
+        {a.estado === "repuesto" && a.responsable && <span className="text-xs text-aviso">Reposición parcial de {a.responsable}</span>}
       </span>
     );
   return (

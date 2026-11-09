@@ -32,7 +32,7 @@ begin
   if not found or a.estado <> 'pendiente' then
     raise exception 'Este ajuste ya fue resuelto. Actualiza la lista.';
   end if;
-  if a.registrado_por = auth.uid() then
+  if a.registrado_por = auth.uid() and public.rol_actual() is distinct from 'administrador' then
     raise exception 'No puedes aprobar ni rechazar un conteo que registraste tú; pide a otro supervisor o al administrador.';
   end if;
   select * into v_prod from public.productos where id = a.producto_id;

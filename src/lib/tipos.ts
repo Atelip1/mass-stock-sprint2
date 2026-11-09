@@ -9,13 +9,20 @@ export type Perfil = {
   intentos_fallidos: number;
   bloqueado_hasta: string | null;
   debe_cambiar_password: boolean;
+  temporal_expira_en?: string | null;
   ultimo_acceso: string | null;
   creado_en: string;
 };
 
 export type Categoria = { id: string; nombre: string; activa: boolean };
 
-export type Proveedor = { id: string; ruc: string; razon_social: string; dias_entrega: number; activo: boolean };
+export type Proveedor = {
+  id: string;
+  ruc: string;
+  razon_social: string;
+  dias_entrega: number;
+  activo: boolean;
+};
 
 export type Producto = {
   id: string;
@@ -42,6 +49,9 @@ export type FilaStock = {
   nombre_norm: string;
   categoria_id: string;
   categoria: string;
+  proveedor_id?: string;
+  proveedor?: string;
+  proveedor_ruc?: string;
   unidad: string;
   stock_minimo: number;
   minimo_percha: number;
@@ -61,10 +71,24 @@ export const NOMBRE_ROL: Record<Rol, string> = {
   reponedor: "Reponedor",
 };
 
-export const UNIDADES = ["unidad", "botella", "lata", "paquete", "bolsa", "caja", "kg", "litro"] as const;
+export const UNIDADES = [
+  "unidad",
+  "botella",
+  "lata",
+  "paquete",
+  "bolsa",
+  "caja",
+  "kg",
+  "litro",
+] as const;
 
 export type TipoAlerta = "abastecimiento" | "percha";
-export type NivelAlerta = "preventiva" | "critica" | "sin_stock" | "por_reponer" | "vacia";
+export type NivelAlerta =
+  | "preventiva"
+  | "critica"
+  | "sin_stock"
+  | "por_reponer"
+  | "vacia";
 export type EstadoAlerta = "pendiente" | "en_reposicion" | "repuesto" | "cerrado";
 export type ClaseABC = "A" | "B" | "C" | "sin_ventas";
 

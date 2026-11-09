@@ -153,8 +153,7 @@ export default function Rotacion() {
           </div>
         )}
         <p className="border-t border-borde px-4 py-3 text-xs text-suave">
-          Del {fecha(desde)} al {fecha(hasta)}. Rotación = unidades vendidas ÷ stock promedio del periodo (RN-18). Ingresos y reposiciones no cuentan como rotación.
-          Los productos sin ventas se revisan para no acumular stock.
+          Del {fecha(desde)} al {fecha(hasta)}. Rotación = unidades vendidas ÷ stock promedio del periodo. Ingresos y reposiciones internas no se contabilizan como ventas.
         </p>
       </section>
     </>

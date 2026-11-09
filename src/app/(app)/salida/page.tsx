@@ -37,6 +37,7 @@ export default function RegistrarSalida() {
   const [codigo, setCodigo] = useState("");
   const [elegido, setElegido] = useState<string | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
+  const [infoScan, setInfoScan] = useState<string | null>(null);
   const [detalle, setDetalle] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
@@ -45,7 +46,7 @@ export default function RegistrarSalida() {
   const porId = useMemo(() => new Map(productos.map((p) => [p.producto_id, p])), [productos]);
   const ids = useMemo(() => [...new Set(lineas.map((l) => l.productoId))].sort().join(","), [lineas]);
 
-  // Lotes de los productos de la salida (para merma y vencimiento, que exigen lote y ubicación).
+  // Lotes de los productos de la salida (para desglose FEFO en venta y selección obligatoria en merma y vencimiento).
   useEffect(() => {
     if (!ids) return;
     supabaseNavegador()
@@ -59,6 +60,33 @@ export default function RegistrarSalida() {
         setLotesPorProducto(m);
       });
   }, [ids, version]);
+
+  const desgloseFefoPercha = (productoId: string, cant: number) => {
+    const lotesVig = (lotesPorProducto[productoId] ?? []).filter(
+      (l) => loteVigente(l) && cantidadEn(l, "percha") > 0,
+    );
+    if (lotesVig.length === 0) return "Sin lotes vigentes en percha";
+    if (!cant || cant <= 0) {
+      const primero = lotesVig[0];
+      return `Automático (FEFO): inicia por ${primero.codigo_lote}${
+        primero.fecha_vencimiento ? ` (vence ${fecha(primero.fecha_vencimiento)})` : ""
+      } · ${cantidadEn(primero, "percha")} u.`;
+    }
+    let rest = cant;
+    const partes: string[] = [];
+    for (const l of lotesVig) {
+      if (rest <= 0) break;
+      const disp = cantidadEn(l, "percha");
+      const tomar = Math.min(rest, disp);
+      if (tomar > 0) {
+        partes.push(
+          `${tomar} u. de ${l.codigo_lote}${l.fecha_vencimiento ? ` (vence ${fecha(l.fecha_vencimiento)})` : ""}`,
+        );
+        rest -= tomar;
+      }
+    }
+    return `FEFO: ${partes.join(" + ")}${rest > 0 ? ` (faltan ${rest} u. en percha)` : ""}`;
+  };
 
   const opcionesOrigen = (productoId: string) =>
     (lotesPorProducto[productoId] ?? []).flatMap((l) =>
@@ -79,22 +107,28 @@ export default function RegistrarSalida() {
     return opcionesOrigen(l.productoId).find((o) => o.valor === l.origen)?.cantidad ?? 0;
   };
 
-  const agregar = (productoId: string) => {
+  const agregar = (productoId: string, desdeEscaneo = false) => {
     if (lineas.some((l) => l.productoId === productoId) && motivo === "venta") {
       setAviso("Ese producto ya está en la salida; cambia su cantidad en la lista.");
+      setInfoScan(null);
       return;
     }
+    const prod = porId.get(productoId);
     setLineas((ls) => [...ls, { clave: ++sig, productoId, cantidad: "", origen: "" }]);
     setElegido(null);
     setCodigo("");
     setAviso(null);
+    setInfoScan(desdeEscaneo && prod ? `✓ ${prod.nombre} agregado a la lista. Ingresa la cantidad.` : null);
     setTimeout(() => document.getElementById(`cant-${sig}`)?.focus(), 50);
   };
 
   const leer = (c: string) => {
     const p = productos.find((x) => x.codigo_barras === c);
-    if (!p) return setAviso(`El código ${c} no está en el catálogo.`);
-    agregar(p.producto_id);
+    if (!p) {
+      setInfoScan(null);
+      return setAviso(`El código ${c} no está en el catálogo.`);
+    }
+    agregar(p.producto_id, true);
   };
 
   const cambiar = (clave: number, c: Partial<Linea>) => setLineas((ls) => ls.map((l) => (l.clave === clave ? { ...l, ...c } : l)));
@@ -206,7 +240,9 @@ export default function RegistrarSalida() {
                       </td>
                       <td>
                         {motivo === "venta" ? (
-                          <span className="text-xs text-suave">Automático (FEFO): lote que vence antes</span>
+                          <span className="block text-xs font-medium text-azul">
+                            {desgloseFefoPercha(l.productoId, Number(l.cantidad))}
+                          </span>
                         ) : ops.length === 0 ? (
                           <span className="text-xs text-peligro">Sin unidades</span>
                         ) : (
@@ -251,7 +287,7 @@ export default function RegistrarSalida() {
             <label className="etiqueta" htmlFor="codigo">
               Código de barras
             </label>
-            <CampoCodigo id="codigo" valor={codigo} onCambiar={(v) => { setCodigo(v); setAviso(null); }} onLeido={leer} />
+            <CampoCodigo id="codigo" valor={codigo} onCambiar={(v) => { setCodigo(v); setAviso(null); setInfoScan(null); }} onLeido={leer} />
           </div>
           <div>
             <label className="etiqueta" htmlFor="producto">
@@ -268,7 +304,13 @@ export default function RegistrarSalida() {
             + Agregar producto
           </button>
         </div>
-        {aviso ? <p className="mt-1 text-xs font-medium text-peligro">{aviso}</p> : <p className="ayuda">Con lectora: haz clic en el campo y escanea; el producto se agrega a la lista y el cursor pasa a su cantidad.</p>}
+        {aviso ? (
+          <p className="mt-1 text-xs font-medium text-peligro">{aviso}</p>
+        ) : infoScan ? (
+          <p className="mt-1 text-xs font-medium text-ok">{infoScan}</p>
+        ) : (
+          <p className="ayuda">Escanea el código de barras o busca el producto para agregarlo a la lista.</p>
+        )}
 
         <label className="etiqueta mt-4" htmlFor="detalle">
           Detalle (opcional)
@@ -294,7 +336,7 @@ export default function RegistrarSalida() {
           </button>
           <span className="text-xs text-suave">
             Registra: {perfil.nombre}
-            {ahora && ` · ${fechaHora(ahora)}`} (se toma de la sesión)
+            {ahora && ` · ${fechaHora(ahora)}`}
           </span>
         </div>
       </section>

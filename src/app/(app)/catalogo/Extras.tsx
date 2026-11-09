@@ -1,12 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useAvisos } from "@/components/Avisos";
 import { Cargando, Etiqueta, MensajeError, Vacio } from "@/components/ui";
 import { supabaseNavegador } from "@/lib/supabase/client";
-import { mensajeError } from "@/lib/formato";
+import { coincide, mensajeError } from "@/lib/formato";
 import { useDatos } from "@/lib/datos";
 import type { Categoria, Producto, Proveedor } from "@/lib/tipos";
+
+const POR_PAGINA = 20;
 
 /* ---------------- RF-11: proveedores ---------------- */
 
@@ -61,7 +63,16 @@ export function Proveedores({ esAdmin, productos, onCambio }: { esAdmin: boolean
   const q = useDatos<Proveedor[]>("proveedores-todos", () => supabaseNavegador().from("proveedores").select("*").order("razon_social"));
   const [edit, setEdit] = useState<{ id: string | null; ruc: string; razon: string; dias: string }>({ id: null, ruc: "", razon: "", dias: "2" });
   const [error, setError] = useState<string | null>(null);
+  const [busqueda, setBusqueda] = useState("");
+  const [pagina, setPagina] = useState(0);
   const usados = (id: string) => productos.filter((p) => p.proveedor_id === id && p.activo).length;
+
+  const filtrados = useMemo(
+    () => (q.datos ?? []).filter((p) => !busqueda.trim() || coincide(p.razon_social, busqueda) || p.ruc.includes(busqueda.trim())),
+    [q.datos, busqueda],
+  );
+  const paginas = Math.max(1, Math.ceil(filtrados.length / POR_PAGINA));
+  const pag = Math.min(pagina, paginas - 1);
 
   async function guardar(e: React.FormEvent) {
     e.preventDefault();
@@ -104,7 +115,7 @@ export function Proveedores({ esAdmin, productos, onCambio }: { esAdmin: boolean
             Días de entrega
           </label>
           <input id="pv-dias" className="campo" inputMode="numeric" value={edit.dias} onChange={(e) => setEdit({ ...edit, dias: e.target.value.replace(/\D/g, "").slice(0, 2) })} />
-          <p className="ayuda">Cuánto tarda en llegar un pedido. Se usa para sugerir el stock mínimo (RN-06).</p>
+          <p className="ayuda">Tiempo estimado de atención de un pedido para sugerir el stock mínimo.</p>
           <div className="mt-3">
             <MensajeError>{error}</MensajeError>
           </div>
@@ -119,10 +130,22 @@ export function Proveedores({ esAdmin, productos, onCambio }: { esAdmin: boolean
         </form>
       )}
       <section className="panel min-w-0">
+        <div className="flex flex-wrap items-end justify-between gap-3 border-b border-borde p-4">
+          <h2 className="text-base font-bold">Proveedores ({filtrados.length})</h2>
+          <input
+            className="campo sm:w-64"
+            placeholder="Buscar por razón social o RUC…"
+            value={busqueda}
+            onChange={(e) => {
+              setBusqueda(e.target.value);
+              setPagina(0);
+            }}
+          />
+        </div>
         {q.datos === undefined ? (
           <Cargando />
-        ) : q.datos.length === 0 ? (
-          <Vacio>No hay proveedores.</Vacio>
+        ) : filtrados.length === 0 ? (
+          <Vacio>No hay proveedores que coincidan.</Vacio>
         ) : (
           <div className="overflow-x-auto">
             <table className="tabla min-w-[600px]">
@@ -136,7 +159,7 @@ export function Proveedores({ esAdmin, productos, onCambio }: { esAdmin: boolean
                 </tr>
               </thead>
               <tbody>
-                {q.datos.map((p) => (
+                {filtrados.slice(pag * POR_PAGINA, (pag + 1) * POR_PAGINA).map((p) => (
                   <tr key={p.id}>
                     <td>
                       <span className="font-semibold">{p.razon_social}</span>
@@ -165,6 +188,24 @@ export function Proveedores({ esAdmin, productos, onCambio }: { esAdmin: boolean
             </table>
           </div>
         )}
+        {filtrados.length > 0 && (
+          <div className="flex flex-wrap items-center justify-between gap-2 border-t border-borde px-4 py-3 text-xs text-suave">
+            <span>
+              Mostrando {pag * POR_PAGINA + 1}–{Math.min((pag + 1) * POR_PAGINA, filtrados.length)} de {filtrados.length} proveedores
+            </span>
+            <div className="flex items-center gap-2">
+              <button className="btn-secundario min-h-8 px-2.5 text-xs" disabled={pag === 0} onClick={() => setPagina(pag - 1)}>
+                Anterior
+              </button>
+              <span>
+                Página {pag + 1} de {paginas}
+              </span>
+              <button className="btn-secundario min-h-8 px-2.5 text-xs" disabled={pag >= paginas - 1} onClick={() => setPagina(pag + 1)}>
+                Siguiente
+              </button>
+            </div>
+          </div>
+        )}
       </section>
     </div>
   );
@@ -175,12 +216,34 @@ export function Proveedores({ esAdmin, productos, onCambio }: { esAdmin: boolean
 export function Categorias({ esAdmin, productos, onCambio }: { esAdmin: boolean; productos: Producto[]; onCambio: () => void }) {
   const { avisar, confirmar } = useAvisos();
   const q = useDatos<Categoria[]>("categorias-activas", () => supabaseNavegador().from("categorias").select("id, nombre, activa").eq("activa", true).order("nombre"));
+  const [busqueda, setBusqueda] = useState("");
+  const [pagina, setPagina] = useState(0);
+  const [nuevaCat, setNuevaCat] = useState("");
+  const [errorCrear, setErrorCrear] = useState<string | null>(null);
+  const [mostrarFusion, setMostrarFusion] = useState(false);
   const [conservar, setConservar] = useState("");
   const [absorber, setAbsorber] = useState("");
   const [error, setError] = useState<string | null>(null);
   const cats = q.datos ?? [];
+  const filtradas = useMemo(() => cats.filter((c) => !busqueda.trim() || coincide(c.nombre, busqueda)), [cats, busqueda]);
+  const paginas = Math.max(1, Math.ceil(filtradas.length / POR_PAGINA));
+  const pag = Math.min(pagina, paginas - 1);
+
   const cuantos = (id: string) => productos.filter((p) => p.categoria_id === id).length;
   const nombre = (id: string) => cats.find((c) => c.id === id)?.nombre ?? "";
+
+  async function crear(e: React.FormEvent) {
+    e.preventDefault();
+    const n = nuevaCat.trim();
+    if (!n) return setErrorCrear("Escribe el nombre de la categoría.");
+    setErrorCrear(null);
+    const { error: err } = await supabaseNavegador().from("categorias").insert({ nombre: n });
+    if (err) return setErrorCrear(err.code === "23505" ? `La categoría «${n}» ya existe.` : mensajeError(err));
+    avisar(`Categoría «${n}» creada.`);
+    setNuevaCat("");
+    q.recargar();
+    onCambio();
+  }
 
   async function fusionar() {
     if (!conservar || !absorber) return setError("Elige la categoría que se conserva y la que se fusiona en ella.");
@@ -204,8 +267,22 @@ export function Categorias({ esAdmin, productos, onCambio }: { esAdmin: boolean;
   return (
     <div className={`grid gap-4 ${esAdmin ? "lg:grid-cols-[1fr_minmax(0,380px)]" : ""}`}>
       <section className="panel min-w-0">
+        <div className="flex flex-wrap items-end justify-between gap-3 border-b border-borde p-4">
+          <h2 className="text-base font-bold">Categorías ({filtradas.length})</h2>
+          <input
+            className="campo sm:w-64"
+            placeholder="Buscar categoría…"
+            value={busqueda}
+            onChange={(e) => {
+              setBusqueda(e.target.value);
+              setPagina(0);
+            }}
+          />
+        </div>
         {q.datos === undefined ? (
           <Cargando />
+        ) : filtradas.length === 0 ? (
+          <Vacio>No hay categorías que coincidan.</Vacio>
         ) : (
           <table className="tabla">
             <thead>
@@ -215,7 +292,7 @@ export function Categorias({ esAdmin, productos, onCambio }: { esAdmin: boolean;
               </tr>
             </thead>
             <tbody>
-              {cats.map((c) => (
+              {filtradas.slice(pag * POR_PAGINA, (pag + 1) * POR_PAGINA).map((c) => (
                 <tr key={c.id}>
                   <td className="font-semibold">{c.nombre}</td>
                   <td className="text-right">{cuantos(c.id)}</td>
@@ -224,43 +301,87 @@ export function Categorias({ esAdmin, productos, onCambio }: { esAdmin: boolean;
             </tbody>
           </table>
         )}
-        <p className="border-t border-borde px-4 py-3 text-xs text-suave">Las categorías nuevas se crean con «+ Nueva categoría» al registrar un producto.</p>
+        {filtradas.length > 0 && (
+          <div className="flex flex-wrap items-center justify-between gap-2 border-t border-borde px-4 py-3 text-xs text-suave">
+            <span>
+              Mostrando {pag * POR_PAGINA + 1}–{Math.min((pag + 1) * POR_PAGINA, filtradas.length)} de {filtradas.length} categorías
+            </span>
+            <div className="flex items-center gap-2">
+              <button className="btn-secundario min-h-8 px-2.5 text-xs" disabled={pag === 0} onClick={() => setPagina(pag - 1)}>
+                Anterior
+              </button>
+              <span>
+                Página {pag + 1} de {paginas}
+              </span>
+              <button className="btn-secundario min-h-8 px-2.5 text-xs" disabled={pag >= paginas - 1} onClick={() => setPagina(pag + 1)}>
+                Siguiente
+              </button>
+            </div>
+          </div>
+        )}
       </section>
       {esAdmin && (
-        <section className="panel h-fit p-4 sm:p-5">
-          <h2 className="text-base font-bold">Fusionar categorías duplicadas</h2>
-          <p className="mt-1 text-sm text-suave">Por ejemplo, «Bebida» y «Bebidas». Los productos pasan a la que se conserva.</p>
-          <label className="etiqueta mt-4" htmlFor="absorber">
-            Categoría duplicada (se desactiva)
-          </label>
-          <select id="absorber" className="campo" value={absorber} onChange={(e) => setAbsorber(e.target.value)}>
-            <option value="">Elige la duplicada</option>
-            {cats.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.nombre} ({cuantos(c.id)})
-              </option>
-            ))}
-          </select>
-          <label className="etiqueta mt-4" htmlFor="conservar">
-            Se conserva
-          </label>
-          <select id="conservar" className="campo" value={conservar} onChange={(e) => setConservar(e.target.value)}>
-            <option value="">Elige la que queda</option>
-            {cats
-              .filter((c) => c.id !== absorber)
-              .map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.nombre} ({cuantos(c.id)})
-                </option>
-              ))}
-          </select>
-          <div className="mt-3">
-            <MensajeError>{error}</MensajeError>
-          </div>
-          <button className="btn-peligro mt-4" onClick={fusionar}>
-            Fusionar
-          </button>
-        </section>
+        <div className="space-y-4">
+          <form onSubmit={crear} className="panel h-fit p-4 sm:p-5" noValidate>
+            <h2 className="text-base font-bold">Nueva categoría</h2>
+            <label className="etiqueta mt-3" htmlFor="cat-nueva">
+              Nombre de la categoría
+            </label>
+            <div className="flex gap-2">
+              <input id="cat-nueva" className="campo" placeholder="Ej. Conservas" value={nuevaCat} onChange={(e) => setNuevaCat(e.target.value)} />
+              <button className="btn-principal shrink-0">Crear</button>
+            </div>
+            {errorCrear && (
+              <div className="mt-2">
+                <MensajeError>{errorCrear}</MensajeError>
+              </div>
+            )}
+          </form>
+
+          <section className="panel h-fit p-4 sm:p-5">
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="text-sm font-bold">Unificar categorías duplicadas</h2>
+              <button type="button" className="enlace text-xs" onClick={() => setMostrarFusion((v) => !v)}>
+                {mostrarFusion ? "Ocultar" : "Abrir herramienta"}
+              </button>
+            </div>
+            <p className="mt-1 text-xs text-suave">Usa esta opción si se registraron dos nombres equivalentes (ej. «Bebida» y «Bebidas»).</p>
+            {mostrarFusion && (
+              <div className="mt-3 border-t border-borde pt-3">
+                <label className="etiqueta" htmlFor="absorber">
+                  Categoría duplicada (se desactiva)
+                </label>
+                <select id="absorber" className="campo" value={absorber} onChange={(e) => setAbsorber(e.target.value)}>
+                  <option value="">Elige la duplicada</option>
+                  {cats.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.nombre} ({cuantos(c.id)})
+                    </option>
+                  ))}
+                </select>
+                <label className="etiqueta mt-3" htmlFor="conservar">
+                  Categoría principal (se conserva)
+                </label>
+                <select id="conservar" className="campo" value={conservar} onChange={(e) => setConservar(e.target.value)}>
+                  <option value="">Elige la que queda</option>
+                  {cats
+                    .filter((c) => c.id !== absorber)
+                    .map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.nombre} ({cuantos(c.id)})
+                      </option>
+                    ))}
+                </select>
+                <div className="mt-3">
+                  <MensajeError>{error}</MensajeError>
+                </div>
+                <button className="btn-peligro mt-3" onClick={fusionar}>
+                  Fusionar categorías
+                </button>
+              </div>
+            )}
+          </section>
+        </div>
       )}
     </div>
   );

@@ -6,7 +6,7 @@ import { supabaseNavegador } from "@/lib/supabase/client";
 import { useDatos } from "@/lib/datos";
 import type { AlertaActiva, Perfil } from "@/lib/tipos";
 import { useConexion } from "./Conexion";
-import { duracion, EtiquetaNivel } from "./ui";
+import { duracion, EtiquetaNivel, EtiquetaTipoAlerta } from "./ui";
 
 /** RF-29 (Product Backlog): campana con el número de alertas nuevas; cada aviso lleva al detalle de la alerta. */
 export function Campana({ perfil }: { perfil: Perfil }) {
@@ -69,7 +69,10 @@ export function Campana({ perfil }: { perfil: Perfil }) {
                   <Link href={`/reposicion?alerta=${a.id}`} onClick={() => setAbierto(false)} className="block px-3 py-2 hover:bg-fondo">
                     <span className="flex items-center justify-between gap-2">
                       <span className="truncate text-sm font-semibold">{a.nombre}</span>
-                      <EtiquetaNivel nivel={a.nivel} />
+                      <span className="flex shrink-0 items-center gap-1">
+                        <EtiquetaTipoAlerta tipo={a.tipo} />
+                        <EtiquetaNivel nivel={a.nivel} />
+                      </span>
                     </span>
                     <span className="text-xs text-suave">
                       {a.tipo === "percha" ? `Percha ${a.percha} de ${a.minimo_percha}` : `Stock ${a.total} de ${a.stock_minimo}`} · hace {duracion(a.horas)}

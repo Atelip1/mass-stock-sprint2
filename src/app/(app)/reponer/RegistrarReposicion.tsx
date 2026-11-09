@@ -9,17 +9,19 @@ import { SelectorProducto } from "@/components/SelectorProducto";
 import { usePerfil } from "@/components/Shell";
 import { BarraPercha, Encabezado, EtiquetaStock, MensajeError, Vacio } from "@/components/ui";
 import { supabaseNavegador } from "@/lib/supabase/client";
-import { fechaHora, mensajeError } from "@/lib/formato";
+import { fecha, fechaHora, mensajeError } from "@/lib/formato";
 import { cantidadEn, loteVigente, sugeridoPercha, textoLote, useLotes, useProductosStock } from "@/lib/operacion";
 import { useAhora } from "@/lib/useAhora";
 import { useDatos } from "@/lib/datos";
-import type { AlertaActiva, EstadoPercha } from "@/lib/tipos";
+import type { AlertaActiva, EstadoPercha, LoteConStock } from "@/lib/tipos";
+
+const MODO_FEFO = "__fefo__";
 
 function estadoPercha(percha: number, minimo: number): EstadoPercha {
   return percha === 0 ? "vacia" : percha <= minimo ? "por_reponer" : "ok";
 }
 
-/** RF-16 (Figuras 8, 40 y 51): traslado de un lote del almacén a la percha. No cambia el stock total (RN-12). */
+/** RF-16 (Figuras 8, 40 y 51): traslado de unidades del almacén a la percha por FEFO. No cambia el stock total (RN-12). */
 export function RegistrarReposicion() {
   const params = useSearchParams();
   const router = useRouter();
@@ -30,9 +32,10 @@ export function RegistrarReposicion() {
   const productos = useProductosStock();
 
   const [productoId, setProductoId] = useState<string | null>(params.get("producto"));
+  const [filtroPendientes, setFiltroPendientes] = useState("");
   const [codigo, setCodigo] = useState("");
   const [avisoCodigo, setAvisoCodigo] = useState<string | null>(null);
-  const [loteId, setLoteId] = useState("");
+  const [loteId, setLoteId] = useState(MODO_FEFO);
   const [cantidad, setCantidad] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
@@ -41,32 +44,42 @@ export function RegistrarReposicion() {
   const producto = productos.find((p) => p.producto_id === productoId) ?? null;
   const lotesAlmacen = useMemo(() => lotes.filter((l) => loteVigente(l) && cantidadEn(l, "almacen") > 0), [lotes]);
   const lote = lotesAlmacen.find((l) => l.id === loteId) ?? null;
+  const esFefo = loteId === MODO_FEFO;
 
-  // Lista de pendientes: alertas de percha que se pueden atender con lo que hay en almacén (RN-08).
+  // Lista de pendientes: alertas de percha que se pueden atender con lo que hay en almacén.
   const { datos: alertas } = useDatos<AlertaActiva[]>("alertas-activas", () => supabaseNavegador().rpc("alertas_activas"));
-  const pendientes = (alertas ?? []).filter((a) => a.tipo === "percha" && !a.almacen_vacio);
+  const pendientes = useMemo(() => {
+    const base = (alertas ?? []).filter((a) => a.tipo === "percha" && !a.almacen_vacio);
+    const q = filtroPendientes.trim().toLowerCase();
+    if (!q) return base;
+    return base.filter((a) => a.nombre.toLowerCase().includes(q) || a.codigo_barras.includes(q));
+  }, [alertas, filtroPendientes]);
 
-  // Al elegir producto: propone el lote que vence antes (FEFO) y la cantidad sugerida.
+  // Al elegir producto: usa por defecto el modo Automático FEFO (reparte desde el lote que vence antes).
   useEffect(() => {
     if (!producto) return;
-    setLoteId((actual) => (lotesAlmacen.some((l) => l.id === actual) ? actual : (lotesAlmacen[0]?.id ?? "")));
+    setLoteId((actual) => (actual === MODO_FEFO || lotesAlmacen.some((l) => l.id === actual) ? actual : MODO_FEFO));
   }, [producto, lotesAlmacen]);
 
+  const totalAlmacenVigente = useMemo(
+    () => lotesAlmacen.reduce((acc, l) => acc + cantidadEn(l, "almacen"), 0),
+    [lotesAlmacen],
+  );
   const sugerido = producto ? sugeridoPercha(producto) : 0;
-  const maxLote = lote ? cantidadEn(lote, "almacen") : 0;
-  // Propone el sugerido, pero nunca más de lo que tiene el lote elegido (si no, el traslado fallaría).
+  const maxDisponible = esFefo ? totalAlmacenVigente : lote ? cantidadEn(lote, "almacen") : 0;
+
   const [editada, setEditada] = useState(false);
   useEffect(() => {
-    if (!producto || !lote || editada) return;
-    const propuesta = Math.min(sugerido, maxLote);
+    if (!producto || lotesAlmacen.length === 0 || editada) return;
+    const propuesta = Math.min(sugerido, maxDisponible);
     setCantidad(propuesta > 0 ? String(propuesta) : "");
-  }, [producto, lote, sugerido, maxLote, editada]);
+  }, [producto, lotesAlmacen.length, sugerido, maxDisponible, editada]);
 
   const elegir = (id: string | null) => {
     setProductoId(id);
     setCantidad("");
     setEditada(false);
-    setLoteId("");
+    setLoteId(MODO_FEFO);
     setError(null);
     setAvisoCodigo(null);
   };
@@ -81,38 +94,80 @@ export function RegistrarReposicion() {
   const n = Number(cantidad);
   const despuesPercha = producto ? producto.percha + (n || 0) : 0;
 
+  // Desglose exacto de lotes a tomar en orden FEFO (o del lote único elegido).
+  const desgloseFefo = useMemo(() => {
+    if (!n || n <= 0) return [];
+    const origen: LoteConStock[] = esFefo ? lotesAlmacen : lote ? [lote] : [];
+    let restante = n;
+    const tramos: { lote: LoteConStock; tomar: number }[] = [];
+    for (const l of origen) {
+      if (restante <= 0) break;
+      const disp = cantidadEn(l, "almacen");
+      const tomar = Math.min(restante, disp);
+      if (tomar > 0) {
+        tramos.push({ lote: l, tomar });
+        restante -= tomar;
+      }
+    }
+    return tramos;
+  }, [n, esFefo, lotesAlmacen, lote]);
+
   async function registrar(e: React.FormEvent) {
     e.preventDefault();
     if (!producto) return setError("Elige el producto que vas a reponer.");
-    if (!lote) return setError("Elige el lote que vas a trasladar.");
+    if (lotesAlmacen.length === 0) return setError("No hay lotes vigentes en almacén para este producto.");
+    if (!esFefo && !lote) return setError("Elige el lote que vas a trasladar.");
     if (!/^\d+$/.test(cantidad) || n <= 0) return setError("La cantidad debe ser un número entero mayor que 0.");
-    if (n > maxLote) return setError(`El lote ${lote.codigo_lote} tiene ${maxLote} en almacén; no puedes trasladar ${n}. Corrige la cantidad.`);
+    if (n > maxDisponible) {
+      return setError(
+        esFefo
+          ? `El almacén tiene ${maxDisponible} unidades vigentes en total; no puedes trasladar ${n}. Corrige la cantidad.`
+          : `El lote ${lote?.codigo_lote} tiene ${maxDisponible} en almacén; no puedes trasladar ${n}. Usa «Automático (FEFO)» para repartir entre varios lotes o reduce la cantidad.`,
+      );
+    }
     setEnviando(true);
     setError(null);
-    const { error: err } = await supabaseNavegador().rpc("registrar_reposicion", {
-      p_producto: producto.producto_id,
-      p_lote: lote.id,
-      p_cantidad: n,
-    });
+    for (const tramo of desgloseFefo) {
+      const { error: err } = await supabaseNavegador().rpc("registrar_reposicion", {
+        p_producto: producto.producto_id,
+        p_lote: tramo.lote.id,
+        p_cantidad: tramo.tomar,
+      });
+      if (err) {
+        setEnviando(false);
+        return setError(mensajeError(err));
+      }
+    }
     setEnviando(false);
-    if (err) return setError(mensajeError(err));
-    avisar(`Reposición registrada: ${n} ${producto.nombre} a la percha.`);
+    const detalleLotes = desgloseFefo.map((t) => `${t.tomar} de ${t.lote.codigo_lote}`).join(" + ");
+    avisar(`Reposición registrada (${detalleLotes}): ${n} ${producto.nombre} a la percha.`);
     elegir(null);
     router.replace("/reponer");
   }
 
   return (
     <>
-      <Encabezado ruta="Operación › Registrar reposición" titulo="Registrar reposición" descripcion="Traslado de unidades del almacén a la percha. No cambia el stock total." />
+      <Encabezado ruta="Operación › Registrar reposición" titulo="Registrar reposición" descripcion="Traslado de unidades del almacén a la percha siguiendo el orden FEFO." />
       <AvisoSinConexion />
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,380px)_1fr]">
         <section className="panel h-fit p-4">
-          <h2 className="text-sm font-bold">Pendientes de reponer</h2>
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="text-sm font-bold">Pendientes de reponer</h2>
+            <span className="text-xs text-suave">{pendientes.length} pendientes</span>
+          </div>
+          {(alertas ?? []).filter((a) => a.tipo === "percha" && !a.almacen_vacio).length > 4 && (
+            <input
+              className="campo mt-2"
+              placeholder="Filtrar pendientes por nombre o código…"
+              value={filtroPendientes}
+              onChange={(e) => setFiltroPendientes(e.target.value)}
+            />
+          )}
           {pendientes.length === 0 ? (
             <Vacio>No hay perchas pendientes con stock en almacén.</Vacio>
           ) : (
-            <ul className="mt-2 space-y-2">
+            <ul className="mt-2 max-h-80 space-y-2 overflow-y-auto pr-1">
               {pendientes.map((a) => (
                 <li key={a.id}>
                   <button
@@ -157,7 +212,10 @@ export function RegistrarReposicion() {
             <Vacio>Elige un producto de la lista de pendientes, escanéalo o búscalo.</Vacio>
           ) : (
             <>
-              <h2 className="text-lg font-bold">{producto.nombre}</h2>
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <h2 className="text-lg font-bold">{producto.nombre}</h2>
+                <span className="font-mono text-xs text-suave">{producto.codigo_barras}</span>
+              </div>
               <div className="mt-3 grid grid-cols-3 gap-2">
                 <div className={`rounded-md border p-3 ${producto.estado_percha === "ok" ? "border-borde" : "border-amarillo bg-aviso-fondo/50"}`}>
                   <p className="text-xs text-suave">En percha</p>
@@ -171,7 +229,15 @@ export function RegistrarReposicion() {
                   <p className="text-2xl font-bold">{producto.almacen}</p>
                   <p className="text-xs text-suave">disponibles para reponer</p>
                 </div>
-                <div className="rounded-md border border-borde p-3">
+                <div
+                  className={`rounded-md border p-3 ${
+                    producto.estado_stock === "ok"
+                      ? "border-borde"
+                      : producto.estado_stock === "bajo_minimo"
+                        ? "border-amarillo bg-aviso-fondo/50"
+                        : "border-rojo bg-peligro-fondo/40"
+                  }`}
+                >
                   <p className="text-xs text-suave">Stock total</p>
                   <p className="text-2xl font-bold">
                     {producto.total} <span className="text-xs font-normal text-suave">mín. {producto.stock_minimo}</span>
@@ -188,12 +254,15 @@ export function RegistrarReposicion() {
                 <div className="mt-4 grid gap-3 sm:grid-cols-2">
                   <div>
                     <label className="etiqueta" htmlFor="lote">
-                      Lote a trasladar (vence antes)
+                      Modo de selección de lote (FEFO)
                     </label>
                     <select id="lote" className="campo" value={loteId} onChange={(e) => { setLoteId(e.target.value); setEditada(false); }}>
+                      <option value={MODO_FEFO}>
+                        Automático (FEFO) — reparte desde el que vence antes ({totalAlmacenVigente} disp.)
+                      </option>
                       {lotesAlmacen.map((l) => (
                         <option key={l.id} value={l.id}>
-                          {textoLote(l, "almacen")}
+                          Solo lote {textoLote(l, "almacen")}
                         </option>
                       ))}
                     </select>
@@ -213,14 +282,29 @@ export function RegistrarReposicion() {
                       }}
                     />
                     <p className="ayuda">
-                      Sugerido: {sugerido} · este lote tiene {maxLote}
-                      {sugerido > maxLote && lotesAlmacen.length > 1 && "; registra el resto con el siguiente lote"}
+                      Sugerido para cubrir percha: <b>{sugerido}</b> · disponible {esFefo ? `en almacén: ${maxDisponible}` : `en este lote: ${maxDisponible}`}
                     </p>
                   </div>
                 </div>
               )}
 
-              {n > 0 && lote && (
+              {desgloseFefo.length > 0 && (
+                <div className="mt-3 rounded-md border border-azul/30 bg-azul-claro/30 px-3 py-2 text-xs">
+                  <p className="font-semibold text-azul">
+                    Desglose FEFO a trasladar ({desgloseFefo.reduce((s, t) => s + t.tomar, 0)} u.):
+                  </p>
+                  <ul className="mt-1 space-y-0.5 text-texto">
+                    {desgloseFefo.map(({ lote: l, tomar }) => (
+                      <li key={l.id}>
+                        • <b>{tomar} u.</b> del lote <b className="font-mono">{l.codigo_lote}</b> · zona {l.zona_almacen} ·{" "}
+                        {l.fecha_vencimiento ? `vence ${fecha(l.fecha_vencimiento)}` : "sin vencimiento"}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {n > 0 && n <= maxDisponible && (
                 <p className="mt-3 rounded-md bg-fondo px-3 py-2 text-sm">
                   <b>Después del traslado:</b> percha {despuesPercha} de {producto.minimo_percha} mín.{" "}
                   <BarraEstadoTexto estado={estadoPercha(despuesPercha, producto.minimo_percha)} /> · almacén {producto.almacen - n} · total{" "}
@@ -230,7 +314,7 @@ export function RegistrarReposicion() {
 
               <p className="mt-3 text-xs text-suave">
                 Registra: {perfil.nombre}
-                {ahora && ` · ${fechaHora(ahora)}`} (se toma de la sesión)
+                {ahora && ` · ${fechaHora(ahora)}`}
               </p>
               <div className="mt-3">
                 <MensajeError>{error}</MensajeError>
@@ -240,7 +324,7 @@ export function RegistrarReposicion() {
                   {enviando ? "Registrando…" : "Registrar reposición"}
                 </button>
                 <button type="button" className="btn-secundario" onClick={() => { elegir(null); router.replace("/reponer"); }}>
-                  Cambiar producto
+                  Limpiar selección
                 </button>
               </div>
             </>
