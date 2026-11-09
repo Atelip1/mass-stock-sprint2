@@ -35,9 +35,17 @@ const nuevaLinea = (): Linea => ({
   aviso: null,
 });
 
-// Mantiene compatibilidad con respuestas de v_stock que no incluyan proveedor.
+// Lee proveedor_id de forma segura, aunque FilaStock no declare esa propiedad.
+// La vista v_stock puede devolverla o no, según su definición actual.
 function obtenerProveedorId(producto: FilaStock | null | undefined): string | undefined {
-  return (producto as (FilaStock & { proveedor_id?: string }) | null | undefined)?.proveedor_id;
+  if (!producto) return undefined;
+
+  const datos = producto as unknown as Record<string, unknown>;
+  const proveedor = datos["proveedor_id"];
+
+  return typeof proveedor === "string" && proveedor.trim() !== ""
+    ? proveedor
+    : undefined;
 }
 
 /** RF-14, RF-15, RF-22: ingreso de mercadería por guía de remisión, con una o varias líneas. Entra al almacén. */
