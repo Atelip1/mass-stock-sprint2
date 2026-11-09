@@ -49,9 +49,9 @@ export type FilaStock = {
   nombre_norm: string;
   categoria_id: string;
   categoria: string;
-  proveedor_id: string;
-  proveedor: string;
-  proveedor_ruc: string;
+  proveedor_id?: string;
+  proveedor?: string;
+  proveedor_ruc?: string;
   unidad: string;
   stock_minimo: number;
   minimo_percha: number;
