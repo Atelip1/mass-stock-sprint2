@@ -35,6 +35,11 @@ const nuevaLinea = (): Linea => ({
   aviso: null,
 });
 
+// Mantiene compatibilidad con respuestas de v_stock que no incluyan proveedor.
+function obtenerProveedorId(producto: FilaStock | null | undefined): string | undefined {
+  return (producto as (FilaStock & { proveedor_id?: string }) | null | undefined)?.proveedor_id;
+}
+
 /** RF-14, RF-15, RF-22: ingreso de mercadería por guía de remisión, con una o varias líneas. Entra al almacén. */
 export default function RegistrarIngreso() {
   const perfil = usePerfil();
@@ -83,7 +88,8 @@ export default function RegistrarIngreso() {
       return;
     }
     cambiar(clave, { productoId: p.producto_id, codigo, aviso: null });
-    if (!proveedorId && p.proveedor_id) setProveedorId(p.proveedor_id);
+    const proveedorProducto = obtenerProveedorId(p);
+    if (!proveedorId && proveedorProducto) setProveedorId(proveedorProducto);
     setTimeout(() => refsCantidad.current.get(clave)?.focus(), 0);
   };
 
@@ -230,7 +236,8 @@ export default function RegistrarIngreso() {
                       onCambiar={(id) => {
                         const prod = id ? porId.get(id) : null;
                         cambiar(l.clave, { productoId: id, codigo: prod?.codigo_barras ?? "", aviso: null });
-                        if (!proveedorId && prod?.proveedor_id) setProveedorId(prod.proveedor_id);
+                        const proveedorProducto = obtenerProveedorId(prod);
+                        if (!proveedorId && proveedorProducto) setProveedorId(proveedorProducto);
                       }}
                     />
                     {p && (
