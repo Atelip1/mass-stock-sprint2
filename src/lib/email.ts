@@ -91,6 +91,33 @@ export async function enviarCorreo({ para, asunto, html, textoPlano }: OpcionesC
   }
 }
 
+const URL_ACCESO_DEFECTO = "https://mass-stock-sprint3.vercel.app/login";
+
+function escaparHtml(valor: string): string {
+  return valor
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+/** Bloque reutilizable con botón principal (con estilos inline compatibles con Gmail) y enlace en texto. */
+function bloqueBotonAcceso(urlAcceso: string, etiqueta: string): string {
+  const urlSegura = escaparHtml(urlAcceso);
+  return `
+    <div style="text-align: center; margin: 24px 0 18px;">
+      <a href="${urlSegura}" target="_blank" rel="noopener noreferrer"
+         style="display: inline-block; background-color: #0b2fb5; color: #ffffff; font-weight: 700; font-size: 14px; text-decoration: none; padding: 12px 24px; border-radius: 8px;">
+        ${escaparHtml(etiqueta)}
+      </a>
+    </div>
+    <p style="font-size: 12px; color: #64748b; text-align: center; margin: 0 0 8px; word-break: break-all;">
+      Si el botón no funciona, copia y abre este enlace:<br>
+      <a href="${urlSegura}" target="_blank" rel="noopener noreferrer" style="color: #0b2fb5;">${urlSegura}</a>
+    </p>
+  `;
+}
+
 /**
  * Notificación de bienvenida y entrega de contraseña temporal a un nuevo usuario.
  */
@@ -100,10 +127,12 @@ export async function enviarCorreoBienvenida(params: {
   claveTemporal: string;
   rol: string;
   minutosValidez?: number;
+  urlAcceso?: string;
 }) {
   const validez = params.minutosValidez ?? 15;
+  const urlAcceso = params.urlAcceso || URL_ACCESO_DEFECTO;
   const asunto = "¡Bienvenido a la familia Mass Stock! · Tus claves de acceso";
-  const textoPlano = `Hola ${params.nombre},\n\nBienvenido(a) al portal Mass Stock de Tiendas Mass.\n\nTus credenciales de acceso son:\nUsuario: ${params.correo}\nContraseña temporal: ${params.claveTemporal}\nRol: ${params.rol}\n\nIMPORTANTE: Por políticas de seguridad institucional, esta clave temporal tiene una vigencia de ${validez} minutos. Al iniciar sesión por primera vez, el sistema te solicitará obligatoriamente crear tu contraseña personal definitiva.\n\nAtentamente,\nEquipo de Sistemas Mass Stock.`;
+  const textoPlano = `Hola ${params.nombre},\n\nBienvenido(a) al portal Mass Stock de Tiendas Mass.\n\nTus credenciales de acceso son:\nUsuario: ${params.correo}\nContraseña temporal: ${params.claveTemporal}\nRol: ${params.rol}\n\nIngresa al sistema aquí: ${urlAcceso}\n\nIMPORTANTE: Por políticas de seguridad institucional, esta clave temporal tiene una vigencia de ${validez} minutos. Al iniciar sesión por primera vez, el sistema te solicitará obligatoriamente crear tu contraseña personal definitiva.\n\nAtentamente,\nEquipo de Sistemas Mass Stock.`;
 
   const html = `
   <!DOCTYPE html>
@@ -134,21 +163,21 @@ export async function enviarCorreoBienvenida(params: {
         <p>Control de Stock y Reposición · Tienda Óvalo Francisco Bolognesi</p>
       </div>
       <div class="content">
-        <p class="welcome">¡Bienvenido(a) a la familia, ${params.nombre}!</p>
+        <p class="welcome">¡Bienvenido(a) a la familia, ${escaparHtml(params.nombre)}!</p>
         <p>Se ha creado exitosamente tu cuenta de usuario para acceder al portal del sistema <b>Mass Stock</b>.</p>
         
         <div class="badge-box">
           <div class="field">
             <div class="label">Usuario / Correo</div>
-            <div style="font-weight: 600;">${params.correo}</div>
+            <div style="font-weight: 600;">${escaparHtml(params.correo)}</div>
           </div>
           <div class="field" style="margin-top: 10px;">
             <div class="label">Contraseña temporal</div>
-            <div class="val-pass">${params.claveTemporal}</div>
+            <div class="val-pass">${escaparHtml(params.claveTemporal)}</div>
           </div>
           <div class="field" style="margin-top: 10px;">
             <div class="label">Rol asignado</div>
-            <div style="text-transform: capitalize;">${params.rol}</div>
+            <div style="text-transform: capitalize;">${escaparHtml(params.rol)}</div>
           </div>
         </div>
 
@@ -156,7 +185,7 @@ export async function enviarCorreoBienvenida(params: {
           ⏱ <b>Seguridad del acceso:</b> Esta clave temporal es válida por <b>${validez} minutos</b>. Por seguridad, al iniciar sesión el sistema te solicitará obligatoriamente cambiarla por una nueva contraseña personal.
         </div>
 
-        <p style="margin-top: 20px;">Por favor ingresa al portal institucional para activar tu cuenta antes de que expire la clave temporal.</p>
+        ${bloqueBotonAcceso(urlAcceso, "Ingresar a Mass Stock")}
       </div>
       <div class="footer">
         Este es un correo automático del sistema Mass Stock. No respondas a este mensaje.
@@ -177,10 +206,12 @@ export async function enviarCorreoRestablecimiento(params: {
   correo: string;
   claveTemporal: string;
   minutosValidez?: number;
+  urlAcceso?: string;
 }) {
   const validez = params.minutosValidez ?? 15;
+  const urlAcceso = params.urlAcceso || URL_ACCESO_DEFECTO;
   const asunto = "Mass Stock · Clave temporal para restablecer contraseña";
-  const textoPlano = `Estimado(a) ${params.nombre},\n\nSe ha solicitado el restablecimiento de tu contraseña en Mass Stock.\n\nTu nueva contraseña temporal es: ${params.claveTemporal}\n\nVigencia: ${validez} minutos.\n\nAl ingresar, deberás crear tu nueva contraseña personal.\n\nSi no reconoces esta acción, por favor comunícate de inmediato con el administrador de la tienda.`;
+  const textoPlano = `Estimado(a) ${params.nombre},\n\nSe ha solicitado el restablecimiento de tu contraseña en Mass Stock.\n\nTu nueva contraseña temporal es: ${params.claveTemporal}\n\nVigencia: ${validez} minutos.\nIngresa al sistema aquí: ${urlAcceso}\n\nAl ingresar, deberás crear tu nueva contraseña personal.\n\nSi no reconoces esta acción, por favor comunícate de inmediato con el administrador de la tienda.`;
 
   const html = `
   <!DOCTYPE html>
@@ -206,19 +237,21 @@ export async function enviarCorreoRestablecimiento(params: {
         <h1>Mass Stock</h1>
       </div>
       <div class="content">
-        <p class="welcome">Estimado(a) ${params.nombre},</p>
+        <p class="welcome">Estimado(a) ${escaparHtml(params.nombre)},</p>
         <p>El administrador del sistema ha solicitado el restablecimiento de tu contraseña de acceso.</p>
         
         <div class="badge-box">
           <div style="font-size: 12px; color: #64748b; font-weight: bold; text-transform: uppercase;">Nueva clave temporal</div>
-          <div class="val-pass">${params.claveTemporal}</div>
+          <div class="val-pass">${escaparHtml(params.claveTemporal)}</div>
         </div>
 
         <div class="warning-box">
           ⏱ <b>Caducidad de seguridad:</b> Tienes <b>${validez} minutos</b> para ingresar al portal con esta clave. Al ingresar se te pedirá definir tu nueva contraseña personal.
         </div>
 
-        <p style="margin-top: 20px; font-size: 13px; color: #64748b;">Si tú no solicitaste este cambio, por favor avisa de inmediato al jefe o supervisor de la tienda.</p>
+        ${bloqueBotonAcceso(urlAcceso, "Restablecer acceso en Mass Stock")}
+
+        <p style="margin-top: 16px; font-size: 13px; color: #64748b;">Si tú no solicitaste este cambio, por favor avisa de inmediato al jefe o supervisor de la tienda.</p>
       </div>
       <div class="footer">
         Mass Stock · Tiendas Mass Óvalo Francisco Bolognesi

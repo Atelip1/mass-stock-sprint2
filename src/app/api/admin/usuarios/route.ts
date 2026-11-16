@@ -16,6 +16,22 @@ function contrasenaTemporal() {
   return s;
 }
 
+function resolverUrlAcceso(req: Request): string {
+  const baseEnv = process.env.NEXT_PUBLIC_APP_URL?.trim();
+  if (baseEnv) return `${baseEnv.replace(/\/+$/, "")}/login`;
+  const host = req.headers.get("x-forwarded-host") || req.headers.get("host");
+  if (host && /^[a-zA-Z0-9.:-]+$/.test(host)) {
+    const protoHeader = req.headers.get("x-forwarded-proto");
+    const proto = protoHeader === "http" || protoHeader === "https"
+      ? protoHeader
+      : host.startsWith("localhost") || host.startsWith("127.")
+        ? "http"
+        : "https";
+    return `${proto}://${host}/login`;
+  }
+  return "https://mass-stock-sprint3.vercel.app/login";
+}
+
 function error(mensaje: string, status = 400) {
   return NextResponse.json({ mensaje }, { status });
 }
@@ -84,6 +100,7 @@ export async function POST(req: Request) {
     claveTemporal: temporal,
     rol,
     minutosValidez: 15,
+    urlAcceso: resolverUrlAcceso(req),
   });
 
   return NextResponse.json({ ok: true });
@@ -153,6 +170,7 @@ export async function PATCH(req: Request) {
         correo: usuario.correo,
         claveTemporal: temporal,
         minutosValidez: 15,
+        urlAcceso: resolverUrlAcceso(req),
       });
 
       return NextResponse.json({ ok: true });
