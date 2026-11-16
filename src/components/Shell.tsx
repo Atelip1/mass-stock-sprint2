@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
@@ -101,10 +100,7 @@ function Marca() {
         <span className="block text-lg font-extrabold tracking-tight text-white">
           Mass <span className="text-amarillo">Stock</span>
         </span>
-        <span className="mt-0.5 flex items-center gap-1.5 text-[11px] text-white/70">
-          <Image src="/mass-logo.png" alt="Mass" width={16} height={16} className="size-4 rounded-[4px]" />
-          Bolognesi · Chincha
-        </span>
+        <span className="mt-0.5 block text-[11px] text-white/70">Tienda Bolognesi · Chincha</span>
       </span>
     </div>
   );

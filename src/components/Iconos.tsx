@@ -1,3 +1,5 @@
+import Image from "next/image";
+
 /** Íconos de línea propios (24×24, trazo actual). Sin dependencias externas. */
 const RUTAS = {
   cubo: "M3 7l9-4 9 4-9 4-9-4zM3 7v10l9 4 9-4V7M12 11v10",
@@ -64,13 +66,18 @@ export const ICONO_RUTA: Record<string, NombreIcono> = {
   "/mi-cuenta": "cuenta",
 };
 
-/** Logo de Mass Stock: cubo azul sobre cuadro amarillo. */
+/** Logo de la tienda (Mass), usado junto al nombre «Mass Stock». */
 export function LogoMassStock({ tamano = "md" }: { tamano?: "sm" | "md" | "lg" }) {
+  const px = tamano === "lg" ? 56 : tamano === "sm" ? 32 : 40;
   const caja = tamano === "lg" ? "size-14 rounded-2xl" : tamano === "sm" ? "size-8 rounded-lg" : "size-10 rounded-xl";
-  const icono = tamano === "lg" ? "size-8" : tamano === "sm" ? "size-4.5" : "size-6";
   return (
-    <span className={`grid shrink-0 place-items-center bg-amarillo text-marca shadow-[0_6px_18px_-6px_rgb(255_209_0/0.7)] ${caja}`} aria-hidden>
-      <Icono nombre="cubo" className={icono} trazo={2.3} />
-    </span>
+    <Image
+      src="/mass-logo.png"
+      alt="Mass"
+      width={px}
+      height={px}
+      priority
+      className={`shrink-0 object-cover shadow-[0_6px_18px_-6px_rgb(255_209_0/0.7)] ${caja}`}
+    />
   );
 }
