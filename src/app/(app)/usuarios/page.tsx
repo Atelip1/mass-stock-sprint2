@@ -8,7 +8,9 @@ import { supabaseNavegador } from "@/lib/supabase/client";
 import { fechaHora } from "@/lib/formato";
 import { NOMBRE_ROL, type Perfil, type Rol } from "@/lib/tipos";
 
-async function llamar(metodo: "POST" | "PATCH", cuerpo: object): Promise<{ ok?: boolean; mensaje?: string }> {
+type Respuesta = { ok?: boolean; mensaje?: string; correoEnviado?: boolean; errorCorreo?: string };
+
+async function llamar(metodo: "POST" | "PATCH", cuerpo: object): Promise<Respuesta> {
   try {
     const r = await fetch("/api/admin/usuarios", {
       method: metodo,
@@ -29,6 +31,18 @@ export default function Usuarios() {
   const [edit, setEdit] = useState<{ id: string | null; nombre: string; correo: string; rol: Rol }>({ id: null, nombre: "", correo: "", rol: "reponedor" });
   const [error, setError] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
+  const [falloCorreo, setFalloCorreo] = useState<string | null>(null);
+
+  /** Si el correo no salió, deja un aviso fijo con el motivo; la clave temporal nunca se muestra al admin. */
+  const revisarCorreo = (r: Respuesta, correo: string, nombre: string) => {
+    if (r.correoEnviado !== false) return false;
+    setFalloCorreo(
+      `No se pudo enviar el correo a ${nombre} (${correo}). Motivo: ${r.errorCorreo ?? "error desconocido"} ` +
+        `Cuando lo corrijas, pulsa «Restablecer clave» en su fila para enviarle una nueva clave temporal.`,
+    );
+    avisar("El correo no se pudo enviar. Revisa el aviso en rojo.", "error");
+    return true;
+  };
 
   const cargar = useCallback(async () => {
     const { data } = await supabaseNavegador().from("perfiles").select("*").order("nombre");
@@ -53,11 +67,11 @@ export default function Usuarios() {
       : await llamar("POST", { nombre: edit.nombre, correo: edit.correo, rol: edit.rol });
     setEnviando(false);
     if (!r.ok) return setError(r.mensaje ?? "No se pudo guardar.");
-    avisar(
-      edit.id
-        ? "Usuario actualizado."
-        : `Usuario creado. Se ha enviado una contraseña temporal (válida 15 min) a ${edit.correo}.`
-    );
+    if (edit.id) avisar("Usuario actualizado.");
+    else if (!revisarCorreo(r, edit.correo, edit.nombre)) {
+      setFalloCorreo(null);
+      avisar(`Usuario creado. Se ha enviado una contraseña temporal (válida 15 min) a ${edit.correo}.`);
+    }
     limpiar();
     cargar();
   }
@@ -77,13 +91,12 @@ export default function Usuarios() {
     }
     const r = await llamar("PATCH", { id: u.id, accion: tipo });
     if (!r.ok) return avisar(r.mensaje ?? "No se pudo completar la acción.", "error");
-    avisar(
-      tipo === "activar"
-        ? `${u.nombre} activado.`
-        : tipo === "desactivar"
-          ? `${u.nombre} desactivado.`
-          : `Contraseña temporal enviada al correo de ${u.nombre}.`
-    );
+    if (tipo === "activar") avisar(`${u.nombre} activado.`);
+    else if (tipo === "desactivar") avisar(`${u.nombre} desactivado.`);
+    else if (!revisarCorreo(r, u.correo, u.nombre)) {
+      setFalloCorreo(null);
+      avisar(`Contraseña temporal enviada al correo de ${u.nombre}.`);
+    }
     cargar();
   }
 
@@ -96,6 +109,17 @@ export default function Usuarios() {
         titulo="Usuarios y Accesos"
         descripcion="Crea cuentas de personal y gestiona roles."
       />
+
+      {falloCorreo && (
+        <div className="mb-4 flex items-start gap-3">
+          <div className="flex-1">
+            <MensajeError>{falloCorreo}</MensajeError>
+          </div>
+          <button type="button" className="btn-secundario" onClick={() => setFalloCorreo(null)}>
+            Cerrar
+          </button>
+        </div>
+      )}
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,360px)_1fr]">
         <form onSubmit={guardar} className="panel h-fit p-4 sm:p-5" noValidate>

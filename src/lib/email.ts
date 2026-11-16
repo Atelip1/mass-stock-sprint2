@@ -72,7 +72,10 @@ export async function enviarCorreo({ para, asunto, html, textoPlano }: OpcionesC
   if (!transporter) {
     console.warn(`[Mass Stock Email Simulación] Correo para: ${para} | Asunto: ${asunto}`);
     console.warn(`[Mass Stock Email Simulación] Para envíos reales, define SMTP_USER y SMTP_PASS en .env.local.`);
-    return { ok: true };
+    return {
+      ok: false,
+      error: "El envío de correos no está configurado en el servidor: faltan las variables SMTP_USER o SMTP_PASS.",
+    };
   }
 
   try {
@@ -87,6 +90,12 @@ export async function enviarCorreo({ para, asunto, html, textoPlano }: OpcionesC
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : "Error al despachar correo por SMTP";
     console.error("[Email SMTP Error]:", msg);
+    if (/invalid login|username and password not accepted|535|EAUTH/i.test(msg)) {
+      return {
+        ok: false,
+        error: "El servidor de correo rechazó el usuario o la contraseña (revisa SMTP_USER y que SMTP_PASS sea una contraseña de aplicación de Gmail).",
+      };
+    }
     return { ok: false, error: msg };
   }
 }

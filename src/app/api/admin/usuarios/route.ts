@@ -94,7 +94,7 @@ export async function POST(req: Request) {
   }
 
   // Notificación automática por correo electrónico institucional
-  await enviarCorreoBienvenida({
+  const envio = await enviarCorreoBienvenida({
     nombre,
     correo,
     claveTemporal: temporal,
@@ -103,7 +103,7 @@ export async function POST(req: Request) {
     urlAcceso: resolverUrlAcceso(req),
   });
 
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, correoEnviado: envio.ok, errorCorreo: envio.error });
 }
 
 /** RF-04 y RF-05: editar, activar, desactivar o restablecer la contraseña de un usuario. */
@@ -165,7 +165,7 @@ export async function PATCH(req: Request) {
         .eq("id", body.id);
 
       // El admin no ve la clave; se envía directamente al correo del colaborador
-      await enviarCorreoRestablecimiento({
+      const envio = await enviarCorreoRestablecimiento({
         nombre: usuario.nombre,
         correo: usuario.correo,
         claveTemporal: temporal,
@@ -173,7 +173,7 @@ export async function PATCH(req: Request) {
         urlAcceso: resolverUrlAcceso(req),
       });
 
-      return NextResponse.json({ ok: true });
+      return NextResponse.json({ ok: true, correoEnviado: envio.ok, errorCorreo: envio.error });
     }
     default:
       return error("Acción no válida.");
