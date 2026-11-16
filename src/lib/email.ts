@@ -12,11 +12,16 @@ export type OpcionesCorreo = {
  * Obtiene el transporte configurado de correo.
  * Soporta Gmail SMTP / cualquier proveedor SMTP.
  */
+/** Nombres (nunca valores) de las variables SMTP obligatorias que llegan vacías al servidor. */
+function variablesSmtpFaltantes(): string[] {
+  return (["SMTP_USER", "SMTP_PASS"] as const).filter((n) => !process.env[n]?.trim());
+}
+
 function obtenerTransporte() {
-  const host = process.env.SMTP_HOST || "smtp.gmail.com";
-  const port = Number(process.env.SMTP_PORT || 465);
-  const user = process.env.SMTP_USER;
-  const pass = process.env.SMTP_PASS;
+  const host = process.env.SMTP_HOST?.trim() || "smtp.gmail.com";
+  const port = Number(process.env.SMTP_PORT?.trim() || 465);
+  const user = process.env.SMTP_USER?.trim();
+  const pass = process.env.SMTP_PASS?.trim();
 
   if (!user || !pass) {
     return null;
@@ -70,11 +75,12 @@ export async function enviarCorreo({ para, asunto, html, textoPlano }: OpcionesC
   // 2. Transporte SMTP (Nodemailer / Gmail)
   const transporter = obtenerTransporte();
   if (!transporter) {
+    const faltan = variablesSmtpFaltantes().join(" y ");
     console.warn(`[Mass Stock Email Simulación] Correo para: ${para} | Asunto: ${asunto}`);
-    console.warn(`[Mass Stock Email Simulación] Para envíos reales, define SMTP_USER y SMTP_PASS en .env.local.`);
+    console.warn(`[Mass Stock Email Simulación] Llegan vacías al servidor: ${faltan}. Defínelas en .env.local o en Vercel.`);
     return {
       ok: false,
-      error: "El envío de correos no está configurado en el servidor: faltan las variables SMTP_USER o SMTP_PASS.",
+      error: `El envío de correos no está configurado en el servidor: llega vacía la variable ${faltan}.`,
     };
   }
 
