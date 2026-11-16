@@ -85,13 +85,19 @@ export async function enviarCorreo({ para, asunto, html, textoPlano }: OpcionesC
   }
 
   try {
-    await transporter.sendMail({
+    const info = await transporter.sendMail({
       from: remitente,
       to: para,
       subject: asunto,
       html,
       text: textoPlano,
     });
+    console.log(
+      `[Email SMTP Enviado] Para: ${para} | Aceptados: ${info.accepted.length} | Rechazados: ${info.rejected.length} | Id: ${info.messageId} | Respuesta: ${info.response}`,
+    );
+    if (info.rejected.length > 0) {
+      return { ok: false, error: `El servidor de correo rechazó el destinatario ${para}.` };
+    }
     return { ok: true };
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : "Error al despachar correo por SMTP";

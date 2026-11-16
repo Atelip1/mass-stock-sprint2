@@ -37,6 +37,7 @@ export function RegistrarReposicion() {
   const [avisoCodigo, setAvisoCodigo] = useState<string | null>(null);
   const [loteId, setLoteId] = useState(MODO_FEFO);
   const [cantidad, setCantidad] = useState("");
+  const [observacion, setObservacion] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
 
@@ -78,6 +79,7 @@ export function RegistrarReposicion() {
   const elegir = (id: string | null) => {
     setProductoId(id);
     setCantidad("");
+    setObservacion("");
     setEditada(false);
     setLoteId(MODO_FEFO);
     setError(null);
@@ -127,8 +129,9 @@ export function RegistrarReposicion() {
     }
     setEnviando(true);
     setError(null);
+    const movimientos: string[] = [];
     for (const tramo of desgloseFefo) {
-      const { error: err } = await supabaseNavegador().rpc("registrar_reposicion", {
+      const { data, error: err } = await supabaseNavegador().rpc("registrar_reposicion", {
         p_producto: producto.producto_id,
         p_lote: tramo.lote.id,
         p_cantidad: tramo.tomar,
@@ -137,10 +140,23 @@ export function RegistrarReposicion() {
         setEnviando(false);
         return setError(mensajeError(err));
       }
+      if (typeof data === "string") movimientos.push(data);
+    }
+    // RF-21: la observación se guarda en cada movimiento de esta reposición. Si falla, la reposición ya quedó registrada.
+    let avisoObs = "";
+    const nota = observacion.trim();
+    if (nota) {
+      for (const id of movimientos) {
+        const { error: e2 } = await supabaseNavegador().rpc("anotar_movimiento", { p_movimiento: id, p_nota: nota });
+        if (e2) {
+          avisoObs = " No se pudo guardar la observación.";
+          break;
+        }
+      }
     }
     setEnviando(false);
     const detalleLotes = desgloseFefo.map((t) => `${t.tomar} de ${t.lote.codigo_lote}`).join(" + ");
-    avisar(`Reposición registrada (${detalleLotes}): ${n} ${producto.nombre} a la percha.`);
+    avisar(`Reposición registrada (${detalleLotes}): ${n} ${producto.nombre} a la percha.${avisoObs}`, avisoObs ? "error" : "ok");
     elegir(null);
     router.replace("/reponer");
   }
@@ -311,6 +327,18 @@ export function RegistrarReposicion() {
                   {producto.total} (sin cambio)
                 </p>
               )}
+
+              <label className="etiqueta mt-3" htmlFor="observacion">
+                Observaciones <span className="font-normal text-suave">(opcional)</span>
+              </label>
+              <input
+                id="observacion"
+                className="campo"
+                maxLength={200}
+                placeholder="Ej. se ordenó la percha; quedan cajas abiertas en almacén"
+                value={observacion}
+                onChange={(e) => setObservacion(e.target.value)}
+              />
 
               <p className="mt-3 text-xs text-suave">
                 Registra: {perfil.nombre}

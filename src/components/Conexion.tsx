@@ -15,6 +15,8 @@ type Ctx = {
   marcarActualizado: () => void;
   causa: string | null;
   reintentar: () => void;
+  /** Personas distintas con el sistema abierto ahora (presencia de Supabase Realtime); null mientras se calcula. */
+  conectados: number | null;
 };
 
 const ConexionCtx = createContext<Ctx | null>(null);
@@ -23,7 +25,8 @@ const ConexionCtx = createContext<Ctx | null>(null);
  * Canal de Supabase Realtime compartido por toda la aplicación (RF-34, RF-35, RNF-18).
  * Si no conecta en 10 s, muestra la causa y el botón «Reintentar».
  */
-export function ConexionProvider({ children }: { children: ReactNode }) {
+export function ConexionProvider({ children, usuarioId }: { children: ReactNode; usuarioId?: string }) {
+  const [conectados, setConectados] = useState<number | null>(null);
   const [estado, setEstado] = useState<Estado>("reconectando");
   const [version, setVersion] = useState(0);
   const [ultima, setUltima] = useState<Date | null>(null);
@@ -104,11 +107,27 @@ export function ConexionProvider({ children }: { children: ReactNode }) {
     return () => clearInterval(t);
   }, []);
 
+  // RF-07 (documento): personal conectado. Cada pestaña abierta se anuncia con el id del usuario;
+  // se cuentan usuarios distintos (dos pestañas de la misma persona cuentan una vez).
+  useEffect(() => {
+    if (!usuarioId) return;
+    const supabase = supabaseNavegador();
+    const presencia = supabase.channel("mass-stock-presencia", { config: { presence: { key: usuarioId } } });
+    presencia
+      .on("presence", { event: "sync" }, () => setConectados(Object.keys(presencia.presenceState()).length))
+      .subscribe((s: string) => {
+        if (s === "SUBSCRIBED") presencia.track({ desde: new Date().toISOString() });
+      });
+    return () => {
+      supabase.removeChannel(presencia);
+    };
+  }, [usuarioId, intento]);
+
   const marcarActualizado = useCallback(() => setUltima(new Date()), []);
   const reintentar = useCallback(() => setIntento((i) => i + 1), []);
 
   return (
-    <ConexionCtx.Provider value={{ estado, version, ultimaActualizacion: ultima, marcarActualizado, causa, reintentar }}>
+    <ConexionCtx.Provider value={{ estado, version, ultimaActualizacion: ultima, marcarActualizado, causa, reintentar, conectados }}>
       {children}
     </ConexionCtx.Provider>
   );

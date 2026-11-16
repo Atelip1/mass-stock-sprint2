@@ -3,14 +3,16 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { useConexion } from "@/components/Conexion";
 import { useFicha } from "@/components/FichaProducto";
+import { Icono, type NombreIcono } from "@/components/Iconos";
 import { usePerfil } from "@/components/Shell";
 import { Cargando, duracion, Etiqueta, EtiquetaNivel, EtiquetaVence, MensajeError, Vacio } from "@/components/ui";
 import { supabaseNavegador } from "@/lib/supabase/client";
 import { hora, mensajeError } from "@/lib/formato";
 import { useAhora } from "@/lib/useAhora";
 import { NADA, useDatos } from "@/lib/datos";
-import type { AlertaActiva, LineaHistorial } from "@/lib/tipos";
+import { NOMBRE_ROL, type AlertaActiva, type LineaHistorial } from "@/lib/tipos";
 
 type Resumen = {
   alertas_abastecimiento: number;
@@ -29,17 +31,67 @@ export default function Inicio() {
   const hoy = ahora?.toLocaleDateString("es-PE", { timeZone: "America/Lima", weekday: "long", day: "numeric", month: "long" });
   return (
     <>
-      <div className="mb-5">
-        <p className="text-xs text-suave">Inicio</p>
-        <h1 className="text-2xl font-bold">Hola, {perfil.nombre.split(" ")[0]}</h1>
-        <p className="mt-0.5 min-h-5 text-sm text-suave first-letter:uppercase">
+      {/* RF-10 (documento): saludo con nombre completo, rol y tienda asignada. */}
+      <section className="fondo-marca relative mb-6 overflow-hidden rounded-2xl px-5 py-6 text-white shadow-elevada sm:px-7">
+        <svg className="pointer-events-none absolute -right-10 -bottom-16 h-48 w-96 opacity-80" viewBox="0 0 400 200" aria-hidden>
+          <path d="M0 170 C 120 110, 250 120, 400 40" fill="none" stroke="#ffd100" strokeWidth="5" strokeLinecap="round" />
+          <path d="M40 200 C 160 140, 280 150, 420 70" fill="none" stroke="#ffd100" strokeOpacity="0.35" strokeWidth="12" strokeLinecap="round" />
+        </svg>
+        <p className="text-xs font-semibold tracking-[0.14em] text-amarillo uppercase">Inicio</p>
+        <h1 className="mt-1 text-3xl font-extrabold">Hola, {perfil.nombre.split(" ")[0]} 👋</h1>
+        <p className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-white/85">
+          <span className="font-semibold text-white">{perfil.nombre}</span>
+          <span aria-hidden>·</span>
+          <span className="rounded-full bg-amarillo px-2 py-0.5 text-xs font-bold text-tinta">{NOMBRE_ROL[perfil.rol]}</span>
+          <span aria-hidden>·</span>
+          <span className="inline-flex items-center gap-1">
+            <Icono nombre="tienda" className="size-4 text-amarillo" /> Tienda Mass Bolognesi · Chincha
+          </span>
+        </p>
+        <p className="mt-2 min-h-5 text-sm text-white/75 first-letter:uppercase">
           {perfil.rol === "reponedor" ? "Tus reposiciones pendientes de este turno." : hoy ? `${hoy}. Lo que necesita atención ahora y lo que pasó hoy en la tienda.` : ""}
         </p>
-      </div>
+      </section>
       {perfil.rol === "reponedor" ? <InicioReponedor /> : <InicioGestion />}
     </>
   );
 }
+
+/** Fecha AAAA-MM-DD en hora de Lima. */
+const diaLima = (d: Date) => d.toLocaleDateString("en-CA", { timeZone: "America/Lima" });
+
+/** RF-08 (documento): unidades recibidas (ingresos) frente a unidades llevadas a percha (reposiciones), por día. */
+function useFlujoSemana() {
+  return useDatos<{ dia: string; ingresos: number; reposiciones: number }[]>("inicio-flujo-7d", async () => {
+    const dias = Array.from({ length: 7 }, (_, i) => diaLima(new Date(Date.now() - (6 - i) * 86_400_000)));
+    const { data, error } = await supabaseNavegador()
+      .from("v_historial")
+      .select("creado_en, tipo, cantidad")
+      .eq("anulado", false)
+      .in("tipo", ["ingreso", "reposicion"])
+      .gte("creado_en", new Date(Date.now() - 8 * 86_400_000).toISOString());
+    if (error) return { data: null, error };
+    const porDia = new Map(dias.map((d) => [d, { dia: d, ingresos: 0, reposiciones: 0 }]));
+    for (const m of (data ?? []) as { creado_en: string; tipo: string; cantidad: number }[]) {
+      const fila = porDia.get(diaLima(new Date(m.creado_en)));
+      if (!fila) continue;
+      if (m.tipo === "ingreso") fila.ingresos += m.cantidad;
+      else fila.reposiciones += m.cantidad;
+    }
+    return { data: [...porDia.values()], error: null };
+  });
+}
+
+/** RF-07 (documento): productos activos en el catálogo. */
+function useProductosActivos() {
+  return useDatos<number>("inicio-productos-activos", async () => {
+    const { count, error } = await supabaseNavegador().from("productos").select("id", { count: "exact", head: true }).eq("activo", true);
+    return { data: count ?? 0, error };
+  });
+}
+
+const DIAS = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
+const etiquetaDia = (dia: string, esHoy: boolean) => (esHoy ? "Hoy" : DIAS[new Date(dia + "T12:00:00Z").getUTCDay()]);
 
 /* ---------------- RF-32 (Figuras 6 y 26): administrador y supervisor ---------------- */
 
@@ -55,35 +107,96 @@ function InicioGestion() {
   const movsQ = useDatos<LineaHistorial[]>("inicio-movimientos", () =>
     sb.from("v_historial").select("*").eq("anulado", false).order("creado_en", { ascending: false }).limit(6),
   );
+  const flujoQ = useFlujoSemana();
+  const activosQ = useProductosActivos();
+  const { conectados } = useConexion();
   const r = resumen.datos ?? null;
   const error = resumen.error;
   const alertas = alertasQ.datos ?? NADA;
   const lotes = lotesQ.datos ?? NADA;
   const movs = movsQ.datos ?? NADA;
+  const flujo = flujoQ.datos ?? null;
 
   if (error) return <MensajeError>{error}</MensajeError>;
   if (!r) return <Cargando />;
 
-  const tarjetas = [
-    { n: r.alertas_abastecimiento, t: "Alertas de abastecimiento", c: "text-peligro", href: "/reposicion" },
-    { n: r.perchas_por_reponer, t: "Perchas por reponer", c: "text-azul", href: "/reposicion" },
-    { n: r.lotes_por_vencer, t: `Lotes por vencer en ${r.dias_aviso ?? 7} días`, c: "text-aviso", href: "/vencimientos" },
-    { n: r.movimientos_hoy, t: "Movimientos de hoy", c: "text-texto", href: "/historial" },
+  const tarjetas: { n: number | string; t: string; icono: NombreIcono; tono: string; href: string }[] = [
+    { n: activosQ.datos ?? "—", t: "Productos activos en catálogo", icono: "catalogo", tono: "bg-azul-claro text-azul", href: "/catalogo" },
+    { n: r.alertas_abastecimiento, t: "Alertas de abastecimiento", icono: "alerta", tono: "bg-peligro-fondo text-peligro", href: "/reposicion" },
+    { n: r.perchas_por_reponer, t: "Perchas por reponer", icono: "percha", tono: "bg-aviso-fondo text-aviso", href: "/reposicion" },
+    { n: r.lotes_por_vencer, t: `Lotes por vencer en ${r.dias_aviso ?? 7} días`, icono: "vencimientos", tono: "bg-aviso-fondo text-aviso", href: "/vencimientos" },
+    { n: r.movimientos_hoy, t: "Movimientos de hoy", icono: "movimientos", tono: "bg-ok-fondo text-ok", href: "/historial" },
+    { n: conectados ?? "—", t: "Personal conectado ahora", icono: "personas", tono: "bg-azul-claro text-azul", href: "/usuarios" },
   ];
   const maxDia = Math.max(1, ...r.percha_vacia_por_dia.map((d) => d.productos));
   const totalSemana = r.percha_vacia_por_dia.reduce((s, d) => s + d.productos, 0);
-  const DIAS = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
 
   return (
     <>
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
         {tarjetas.map((t) => (
-          <Link key={t.t} href={t.href} className="panel block p-4 transition hover:border-azul">
-            <p className={`text-3xl font-bold ${t.c}`}>{t.n}</p>
-            <p className="mt-1 text-sm text-suave">{t.t}</p>
+          <Link key={t.t} href={t.href} className="panel group block p-4 transition hover:-translate-y-0.5 hover:border-azul/40 hover:shadow-elevada">
+            <span className={`grid size-10 place-items-center rounded-xl ${t.tono}`}>
+              <Icono nombre={t.icono} className="size-5" />
+            </span>
+            <p className="mt-3 text-3xl font-extrabold tracking-tight tabular-nums">{t.n}</p>
+            <p className="mt-0.5 text-[13px] leading-snug text-suave">{t.t}</p>
           </Link>
         ))}
       </div>
+
+      <section className="panel mt-4 p-4 sm:p-5">
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div>
+            <h2 className="text-base font-bold">Recepciones vs. reposiciones</h2>
+            <p className="text-xs text-suave">Unidades recibidas en almacén y unidades llevadas a percha en los últimos 7 días.</p>
+          </div>
+          <div className="flex items-center gap-4 text-xs font-semibold">
+            <span className="inline-flex items-center gap-1.5">
+              <span className="size-3 rounded-sm bg-marca" aria-hidden /> Recepciones
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <span className="size-3 rounded-sm bg-amarillo-oscuro" aria-hidden /> Reposiciones
+            </span>
+          </div>
+        </div>
+        {flujoQ.error ? (
+          <div className="mt-3">
+            <MensajeError>{flujoQ.error}</MensajeError>
+          </div>
+        ) : !flujo ? (
+          <Cargando />
+        ) : flujo.every((d) => d.ingresos === 0 && d.reposiciones === 0) ? (
+          <Vacio>No hubo recepciones ni reposiciones en los últimos 7 días.</Vacio>
+        ) : (
+          (() => {
+            const max = Math.max(1, ...flujo.flatMap((d) => [d.ingresos, d.reposiciones]));
+            return (
+              <div className="mt-4 grid h-44 grid-cols-7 items-end gap-2 sm:gap-4" role="img" aria-label="Unidades recibidas y repuestas en cada uno de los últimos 7 días">
+                {flujo.map((d, i) => {
+                  const esHoy = i === flujo.length - 1;
+                  return (
+                    <div key={d.dia} className="flex h-full flex-col justify-end">
+                      <div className="flex flex-1 items-end justify-center gap-1">
+                        {[
+                          { v: d.ingresos, c: "bg-marca", t: "recepciones" },
+                          { v: d.reposiciones, c: "bg-amarillo-oscuro", t: "reposiciones" },
+                        ].map((b) => (
+                          <div key={b.t} className="flex w-1/2 max-w-7 flex-col items-center justify-end gap-1">
+                            <span className="text-[11px] font-semibold tabular-nums">{b.v || ""}</span>
+                            <div className={`w-full rounded-t-md ${b.c} transition-all`} style={{ height: `${b.v ? Math.max(6, (b.v / max) * 120) : 3}px`, opacity: b.v ? 1 : 0.25 }} title={`${b.v} unid. ${b.t}`} />
+                          </div>
+                        ))}
+                      </div>
+                      <span className={`mt-1.5 text-center text-[11px] ${esHoy ? "font-bold text-texto" : "text-suave"}`}>{etiquetaDia(d.dia, esHoy)}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()
+        )}
+      </section>
 
       <div className="mt-4 grid gap-4 lg:grid-cols-[1.4fr_1fr]">
         <section className="panel">

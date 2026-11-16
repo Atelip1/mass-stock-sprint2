@@ -75,6 +75,19 @@ export default function RegistrarIngreso() {
     setLineas((ls) => ls.map((l) => (l.clave === clave ? { ...l, ...cambios } : l)));
   }, []);
 
+  // RF-11 (documento): desde el catálogo se llega con ?producto=<id> para cargar el stock inicial de un producto nuevo.
+  const preelegido = useRef(false);
+  useEffect(() => {
+    if (preelegido.current || productos.length === 0) return;
+    const id = new URLSearchParams(window.location.search).get("producto");
+    const p = id ? porId.get(id) : undefined;
+    preelegido.current = true;
+    if (!p) return;
+    setLineas((ls) => ls.map((l, i) => (i === 0 && !l.productoId ? { ...l, productoId: p.producto_id, codigo: p.codigo_barras } : l)));
+    const proveedorProducto = p.proveedor_id;
+    if (proveedorProducto) setProveedorId((actual) => actual || proveedorProducto);
+  }, [productos, porId]);
+
   /** Al leer un código (lectora o cámara) se elige el producto y el cursor pasa a la cantidad. */
   const leerCodigo = (clave: number, codigo: string) => {
     const p = productos.find((x) => x.codigo_barras === codigo);

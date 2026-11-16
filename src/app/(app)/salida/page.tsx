@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useAvisos } from "@/components/Avisos";
 import { CampoCodigo } from "@/components/CampoCodigo";
@@ -201,7 +202,13 @@ export default function RegistrarSalida() {
             </button>
           ))}
         </div>
-        <p className="ayuda">El motivo aplica a todos los productos de esta salida.</p>
+        <p className="ayuda">
+          El motivo aplica a todos los productos de esta salida. ¿Es un <b>ajuste de inventario</b> (la cantidad física no coincide con el sistema)? Regístralo en{" "}
+          <Link href="/conteo" className="enlace">
+            Conteo físico
+          </Link>
+          : el ajuste queda pendiente hasta que otro usuario lo apruebe con su motivo.
+        </p>
       </section>
 
       <section className="panel mt-4 p-4 sm:p-5">

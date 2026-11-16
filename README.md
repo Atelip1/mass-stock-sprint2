@@ -72,8 +72,14 @@ En cada proyecto:
 1. **SQL Editor** → pega y ejecuta, **en este orden**, cada archivo de `supabase/migrations/`:
    1. `20261019000001_esquema_inicial.sql` (Sprint 2)
    2. `20261102000001_sprint3_operacion_y_alertas.sql` (Sprint 3)
-   3. `20261116000001_sprint4_control_y_analisis.sql` (Sprint 4)
-   4. `20261130000001_sprint5_y_backlog.sql` (Sprint 5 y Product Backlog)
+   3. `20261108000001_correccion_proveedor_vstock_y_correos.sql` (proveedor en el stock y clave temporal de 15 min)
+   4. `20261116000001_sprint4_control_y_analisis.sql` (Sprint 4)
+   5. `20261116000002_restaura_reglas_v_stock.sql` (v_stock vuelve a respetar RLS y no suma lotes vencidos)
+   6. `20261116000003_observaciones_reposicion.sql` (observaciones en la reposición)
+   7. `20261130000001_sprint5_y_backlog.sql` (Sprint 5 y Product Backlog)
+
+   Después, `supabase/parche_correcciones_ui_fefo.sql` (reposición FEFO multilote). Si tu base ya tenía todo lo anterior,
+   basta con ejecutar los dos archivos nuevos (5 y 6); se pueden ejecutar más de una vez.
 2. **SQL Editor** → ejecuta `supabase/seed.sql` (categorías oficiales y proveedores) si aún no lo hiciste.
    Los RUC de los proveedores son de ejemplo: cámbialos por los reales en *Table Editor → proveedores*.
 3. **Authentication → Sign In / Providers → Email**: desactiva **Allow new users to sign up**

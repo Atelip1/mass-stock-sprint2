@@ -7,6 +7,7 @@ import { usePerfil } from "@/components/Shell";
 import { Cargando, Encabezado, Etiqueta, MensajeError } from "@/components/ui";
 import { supabaseNavegador } from "@/lib/supabase/client";
 import { fecha, fechaHora, hoyISO, mensajeError } from "@/lib/formato";
+import { descargarCSV, numCSV } from "@/lib/csv";
 
 type Clave = "tiempo_reposicion_percha" | "tiempo_reposicion_abastecimiento" | "duracion_quiebre" | "rotacion" | "merma_vencimiento";
 type Semana = { desde: string; hasta: string } & Record<Clave, number | null>;
@@ -68,12 +69,36 @@ export default function Indicadores() {
   if (!datos) return <Cargando />;
   const actual = datos.semanas.at(-1)!;
 
+  /** RF-40 (documento): exporta los indicadores semanales con su línea base y meta para la revisión gerencial. */
+  function exportar() {
+    const claves = Object.keys(IND) as Clave[];
+    const filas: (string | number | null)[][] = datos!.semanas.map((s) => [
+      `${fecha(s.desde)} – ${fecha(s.hasta)}`,
+      ...claves.map((k) => (s[k] === null || s[k] === undefined ? "" : numCSV(Number(Number(s[k]).toFixed(IND[k].decimales))))),
+    ]);
+    filas.push(["Línea base", ...claves.map((k) => numCSV(datos!.lineas_base[k]?.valor))]);
+    filas.push(["Meta", ...claves.map((k) => numCSV(datos!.lineas_base[k]?.meta))]);
+    filas.push([
+      "Variación última semana (%)",
+      ...claves.map((k) => {
+        const v = variacion(actual[k], datos!.lineas_base[k], k);
+        return v ? numCSV(Number(v.v.toFixed(1))) : "";
+      }),
+    ]);
+    descargarCSV(`indicadores-${hoyISO()}`, ["Semana", ...claves.map((k) => `${IND[k].nombre} (${IND[k].unidad})`)], filas);
+  }
+
   return (
     <>
       <Encabezado
         ruta="Análisis › Indicadores"
         titulo="Indicadores de mejora"
         descripcion={`Los cuatro indicadores acordados con la tienda, comparados con su línea base y su meta. Antes y después usan la misma unidad. Periodo: últimas 7 semanas (la actual va del ${fecha(actual.desde)} al ${fecha(actual.hasta)}).`}
+        acciones={
+          <button type="button" className="btn-secundario" onClick={exportar}>
+            Exportar CSV
+          </button>
+        }
       />
 
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">

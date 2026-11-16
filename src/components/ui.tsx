@@ -4,11 +4,14 @@ import type { EstadoPercha, EstadoStock } from "@/lib/tipos";
 /** Encabezado común de cada pantalla: ruta, título y descripción (RNF-06). */
 export function Encabezado({ ruta, titulo, descripcion, acciones }: { ruta: string; titulo: string; descripcion: string; acciones?: ReactNode }) {
   return (
-    <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
-      <div>
-        <p className="text-xs text-suave">{ruta}</p>
-        <h1 className="text-2xl font-bold">{titulo}</h1>
-        <p className="mt-0.5 text-sm text-suave">{descripcion}</p>
+    <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
+      <div className="max-w-3xl">
+        <p className="inline-flex items-center gap-1.5 rounded-full bg-azul-claro/70 px-2.5 py-0.5 text-[11px] font-semibold text-azul">
+          <span className="size-1.5 rounded-full bg-amarillo-oscuro" aria-hidden />
+          {ruta}
+        </p>
+        <h1 className="mt-2 text-[26px] leading-tight font-extrabold">{titulo}</h1>
+        <p className="mt-1 text-sm text-suave">{descripcion}</p>
       </div>
       {acciones}
     </div>
@@ -80,18 +83,35 @@ export function BarraPercha({ percha, minimo, estado, compacta }: { percha: numb
 }
 
 export function Vacio({ children }: { children: ReactNode }) {
-  return <p className="px-4 py-10 text-center text-sm text-suave">{children}</p>;
+  return (
+    <div className="flex flex-col items-center gap-2 px-4 py-10 text-center text-sm text-suave">
+      <span className="grid size-10 place-items-center rounded-full bg-fondo text-suave/70" aria-hidden>
+        <svg viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M3 7l9-4 9 4-9 4-9-4zM3 7v10l9 4 9-4V7M12 11v10" />
+        </svg>
+      </span>
+      <p>{children}</p>
+    </div>
+  );
 }
 
 export function Cargando() {
-  return <p className="px-4 py-10 text-center text-sm text-suave">Cargando…</p>;
+  return (
+    <p className="flex items-center justify-center gap-2 px-4 py-10 text-center text-sm text-suave" role="status">
+      <span className="size-4 animate-spin rounded-full border-2 border-azul/25 border-t-azul" aria-hidden />
+      Cargando…
+    </p>
+  );
 }
 
 export function MensajeError({ children }: { children: ReactNode }) {
   if (!children) return null;
   return (
-    <p role="alert" className="rounded-md bg-peligro-fondo px-3 py-2 text-sm font-medium text-peligro">
-      {children}
+    <p role="alert" className="flex items-start gap-2 rounded-lg border border-peligro/20 bg-peligro-fondo px-3 py-2 text-sm font-medium text-peligro">
+      <svg viewBox="0 0 24 24" className="mt-0.5 size-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+        <path d="M12 9v4M12 17h.01M10.3 3.9 2.4 17.5A2 2 0 0 0 4.1 20.5h15.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" />
+      </svg>
+      <span>{children}</span>
     </p>
   );
 }
@@ -162,14 +182,14 @@ export function Pestanas<T extends string>({
   onCambiar: (v: T) => void;
 }) {
   return (
-    <div role="tablist" className="mb-4 flex flex-wrap gap-1 rounded-lg border border-borde bg-panel p-1">
+    <div role="tablist" className="mb-4 flex flex-wrap gap-1 rounded-xl border border-borde bg-panel p-1 shadow-suave">
       {opciones.map((o) => (
         <button
           key={o.valor}
           role="tab"
           aria-selected={o.valor === valor}
           onClick={() => onCambiar(o.valor)}
-          className={`min-h-9 rounded-md px-3 text-sm font-semibold ${o.valor === valor ? "bg-marca text-white" : "text-suave hover:bg-fondo"}`}
+          className={`min-h-9 rounded-lg px-3.5 text-sm font-semibold transition ${o.valor === valor ? "bg-marca text-white shadow-[0_6px_14px_-8px_rgb(11_47_181/0.8)]" : "text-suave hover:bg-fondo hover:text-texto"}`}
         >
           {o.etiqueta}
           {o.cantidad !== undefined && ` (${o.cantidad})`}
@@ -182,8 +202,8 @@ export function Pestanas<T extends string>({
 /** Ventana modal común con título, contenido y acciones. */
 export function Modal({ titulo, children, onCerrar }: { titulo: string; children: ReactNode; onCerrar: () => void }) {
   return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal aria-label={titulo} onClick={onCerrar}>
-      <div className="panel w-full max-w-md p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-tinta/45 p-4 backdrop-blur-[2px]" role="dialog" aria-modal aria-label={titulo} onClick={onCerrar}>
+      <div className="panel w-full max-w-md animate-entrar rounded-2xl p-6 shadow-elevada" onClick={(e) => e.stopPropagation()}>
         <h2 className="text-lg font-bold">{titulo}</h2>
         {children}
       </div>

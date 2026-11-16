@@ -37,8 +37,8 @@ export default function CambiarPassword() {
 
   return (
     <PantallaAcceso>
-      <form onSubmit={enviar} className="panel p-6 shadow-sm" noValidate>
-        <h2 className="text-xl font-bold">Crea tu contraseña</h2>
+      <form onSubmit={enviar} noValidate>
+        <h2 className="text-2xl font-extrabold tracking-tight">Crea tu contraseña</h2>
         <p className="mt-1 text-sm text-suave">Es tu primer ingreso o te dieron una contraseña temporal. Elige una nueva para continuar.</p>
         {error && (
           <p role="alert" className="mt-4 rounded-md bg-peligro-fondo px-3 py-2 text-sm font-medium text-peligro">

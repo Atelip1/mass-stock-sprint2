@@ -178,7 +178,8 @@ set request.jwt.claim.sub = :R;
 select t.ok(not exists(select 1 from v_historial where guia_remision='G-ADM') and exists(select 1 from v_historial where guia_remision='G-001'),'RF-36 reponedor ve solo sus registros');
 set request.jwt.claim.sub = :R2;
 select t.ok((select count(*) from v_historial)=0,'RF-36 otro reponedor no ve registros ajenos');
-select t.ok(exists(select 1 from alertas where producto_id=(select id from productos where nombre like 'Detergente%') and tipo='abastecimiento' and estado='repuesto'),'RN-09 ingreso deja la alerta de abastecimiento «Repuesto» (aún bajo mínimo)');
+-- Regla vigente (parche FEFO): un ingreso parcial registra la atención, pero si el stock sigue bajo el mínimo la alerta vuelve a «Pendiente» para seguir atendiéndola.
+select t.ok(exists(select 1 from alertas where producto_id=(select id from productos where nombre like 'Detergente%') and tipo='abastecimiento' and estado='pendiente' and repuesta_en is not null),'RN-09 ingreso parcial registra la atención y deja la alerta «Pendiente» (aún bajo mínimo)');
 
 reset role;
 -- RN-10 lote vencido no suma: simular vencimiento
@@ -189,6 +190,21 @@ select t.err($$select registrar_reposicion((select id from productos where nombr
 select t.ok(exists(select 1 from v_vencimientos where codigo_lote='L-A2' and dias<0),'RF-30 lote vencido aparece en vencimientos');
 select refrescar_alertas();
 select t.ok(exists(select 1 from alertas where producto_id=(select id from productos where nombre like 'Aceite%') and tipo='abastecimiento' and estado<>'cerrado' and nivel='critica'),'RF-23 al vencer un lote la alerta pasa a crítica (refrescar_alertas)');
+reset role;
+
+-- RNF-13: sin iniciar sesión (clave pública) no se lee el stock; v_stock respeta RLS (security_invoker).
+set role anon;
+select count(*) as filas_anon from v_stock \gset
+reset role;
+select t.ok(:filas_anon = 0, 'RNF-13 sin sesión v_stock no muestra filas', :filas_anon || ' filas visibles');
+
+-- RF-21 (documento): la reposición guarda la observación del reponedor; nadie más puede anotarla.
+set role authenticated; set request.jwt.claim.sub = :R;
+select registrar_reposicion((select id from productos where nombre like 'Detergente%'), null, 1) as mov_obs \gset
+select anotar_movimiento(:'mov_obs', 'Cliente pidió más');
+select t.ok(exists(select 1 from v_historial where movimiento_id = :'mov_obs' and detalle like '%Obs.: Cliente pidió más'), 'RF-21 la reposición guarda la observación');
+set request.jwt.claim.sub = :R2;
+select t.err(format('select anotar_movimiento(%L, %L)', :'mov_obs', 'ajena'), 'propias', 'RF-21 otro usuario no anota una reposición ajena');
 reset role;
 select n, case when ok then 'OK ' else 'FALLA' end r, nombre, case when not ok then detalle end from t.res order by n;
 select count(*) filter (where ok) ok, count(*) filter (where not ok) fallas from t.res;

@@ -12,6 +12,7 @@ import { supabaseNavegador } from "@/lib/supabase/client";
 import { useTema } from "@/lib/tema";
 import { Campana } from "./Campana";
 import { FichaProvider } from "./FichaProducto";
+import { ICONO_RUTA, Icono, LogoMassStock } from "./Iconos";
 
 const PerfilCtx = createContext<Perfil | null>(null);
 export function usePerfil() {
@@ -81,16 +82,14 @@ function useConteoAlertas(rol: Perfil["rol"]) {
 
 function Marca() {
   return (
-    <div className="flex items-center gap-2 px-4 py-4">
+    <div className="flex items-center gap-3 px-5 pt-5 pb-4">
       {/* RNF-05: reemplazar este ícono por el logo oficial que entregue la tienda (public/logo.svg). */}
-      <span className="grid size-9 place-items-center rounded-md bg-amarillo text-marca" aria-hidden>
-        <svg viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth="2.2">
-          <path d="M3 7l9-4 9 4-9 4-9-4zM3 7v10l9 4 9-4V7M12 11v10" />
-        </svg>
-      </span>
+      <LogoMassStock tamano="md" />
       <span className="leading-tight">
-        <span className="block text-base font-bold text-white">Mass Stock</span>
-        <span className="block text-[10px] text-white/70">Tienda Bolognesi · Chincha</span>
+        <span className="block text-lg font-extrabold tracking-tight text-white">
+          Mass <span className="text-amarillo">Stock</span>
+        </span>
+        <span className="block text-[11px] text-white/65">Tienda Bolognesi · Chincha</span>
       </span>
     </div>
   );
@@ -108,11 +107,14 @@ function Menu({ perfil, onNavegar }: { perfil: Perfil; onNavegar?: () => void })
         href={href}
         onClick={onNavegar}
         aria-current={actual ? "page" : undefined}
-        className={`flex items-center justify-between gap-2 rounded-md px-3 py-2 text-sm ${actual ? "bg-amarillo font-semibold text-tinta" : "text-white/90 hover:bg-white/10"}`}
+        className={`group flex items-center gap-3 rounded-xl px-3 py-2 text-sm transition ${
+          actual ? "bg-amarillo font-bold text-tinta shadow-[0_8px_20px_-10px_rgb(255_209_0/0.9)]" : "text-white/85 hover:bg-white/10 hover:text-white"
+        }`}
       >
-        {etiqueta}
+        <Icono nombre={ICONO_RUTA[href] ?? "cubo"} className={`size-[18px] shrink-0 ${actual ? "text-marca" : "text-white/60 group-hover:text-amarillo"}`} trazo={2} />
+        <span className="flex-1 truncate">{etiqueta}</span>
         {href === "/reposicion" && alertas > 0 && (
-          <span className="rounded-full bg-peligro px-1.5 text-[11px] font-bold text-white" aria-label={`${alertas} alertas activas`}>
+          <span className="min-w-5 rounded-full bg-peligro px-1.5 text-center text-[11px] leading-5 font-bold text-white" aria-label={`${alertas} alertas activas`}>
             {alertas}
           </span>
         )}
@@ -120,21 +122,25 @@ function Menu({ perfil, onNavegar }: { perfil: Perfil; onNavegar?: () => void })
     );
   };
   return (
-    <nav className="flex flex-1 flex-col gap-4 px-3 pb-4" aria-label="Menú principal">
+    <nav className="flex flex-1 flex-col gap-5 px-3 pb-4" aria-label="Menú principal">
       <div>{visibles.filter((p) => p.grupo === null && p.href !== "/mi-cuenta").map((p) => enlace(p.href, p.etiqueta))}</div>
       {GRUPOS.map((g) => {
         const items = visibles.filter((p) => p.grupo === g);
         if (!items.length) return null;
         return (
-          <div key={g}>
-            <p className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-white/60">{g}</p>
+          <div key={g} className="space-y-0.5">
+            <p className="px-3 pb-1 text-[10.5px] font-bold tracking-[0.12em] text-white/45 uppercase">{g}</p>
             {items.map((p) => enlace(p.href, p.etiqueta))}
           </div>
         );
       })}
-      <div className="mt-auto border-t border-white/15 pt-3">
+      <div className="mt-auto space-y-0.5 border-t border-white/10 pt-3">
         {enlace("/mi-cuenta", "Mi cuenta")}
-        <button onClick={() => cerrarSesion()} className="block w-full rounded-md px-3 py-2 text-left text-sm text-white/90 hover:bg-white/10">
+        <button
+          onClick={() => cerrarSesion()}
+          className="group flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm text-white/85 transition hover:bg-white/10 hover:text-white"
+        >
+          <Icono nombre="salir" className="size-[18px] text-white/60 group-hover:text-amarillo" />
           Cerrar sesión
         </button>
       </div>
@@ -159,15 +165,15 @@ function MenuUsuario({ perfil }: { perfil: Perfil }) {
     .toUpperCase();
   return (
     <div className="relative" ref={caja}>
-      <button className="flex items-center gap-2 rounded-md px-1 py-1 hover:bg-fondo" onClick={() => setAbierto((a) => !a)} aria-expanded={abierto}>
-        <span className="grid size-8 place-items-center rounded-full bg-marca text-xs font-bold text-white">{iniciales}</span>
+      <button className="flex items-center gap-2.5 rounded-xl px-1.5 py-1 transition hover:bg-fondo" onClick={() => setAbierto((a) => !a)} aria-expanded={abierto}>
+        <span className="grid size-9 place-items-center rounded-full bg-gradient-to-br from-marca to-marca-profundo text-xs font-bold text-white ring-2 ring-amarillo/70">{iniciales}</span>
         <span className="hidden text-left leading-tight lg:block">
           <span className="block text-sm font-semibold">{perfil.nombre}</span>
           <span className="block text-xs text-suave">{NOMBRE_ROL[perfil.rol]}</span>
         </span>
       </button>
       {abierto && (
-        <div className="panel absolute right-0 z-40 mt-1 w-56 py-1 shadow-lg">
+        <div className="panel absolute right-0 z-40 mt-2 w-60 animate-entrar overflow-hidden py-1 shadow-elevada">
           <p className="truncate border-b border-borde px-3 py-2 text-xs text-suave">{perfil.correo}</p>
           <Link href="/mi-cuenta" className="block px-3 py-2 text-sm hover:bg-fondo" onClick={() => setAbierto(false)}>
             Mi cuenta
@@ -201,11 +207,11 @@ export function Shell({ perfil, children }: { perfil: Perfil; children: ReactNod
   return (
     <PerfilCtx.Provider value={perfil}>
       <AvisosProvider>
-        <ConexionProvider>
+        <ConexionProvider usuarioId={perfil.id}>
           <FichaProvider>
             <div className="flex min-h-dvh">
               {/* Menú lateral en escritorio */}
-              <aside className="sticky top-0 hidden h-dvh w-60 shrink-0 flex-col overflow-y-auto bg-marca lg:flex">
+              <aside className="fondo-marca sticky top-0 hidden h-dvh w-64 shrink-0 flex-col overflow-y-auto lg:flex">
                 <Marca />
                 <Menu perfil={perfil} />
               </aside>
@@ -213,16 +219,16 @@ export function Shell({ perfil, children }: { perfil: Perfil; children: ReactNod
               {/* Menú lateral en celular: el mismo, se abre con «Menú» (RNF-01) */}
               {menuMovil && (
                 <div className="fixed inset-0 z-50 flex lg:hidden" onClick={cerrarMenu}>
-                  <aside className="flex h-full w-72 max-w-[85%] flex-col overflow-y-auto bg-marca" onClick={(e) => e.stopPropagation()}>
+                  <aside className="fondo-marca flex h-full w-72 max-w-[85%] animate-entrar flex-col overflow-y-auto" onClick={(e) => e.stopPropagation()}>
                     <Marca />
                     <Menu perfil={perfil} onNavegar={cerrarMenu} />
                   </aside>
-                  <div className="flex-1 bg-black/40" />
+                  <div className="flex-1 bg-tinta/50 backdrop-blur-[2px]" />
                 </div>
               )}
 
               <div className="flex min-w-0 flex-1 flex-col">
-                <header className="sticky top-0 z-30 flex items-center gap-2 border-b border-borde bg-panel px-3 py-2 sm:px-5">
+                <header className="sticky top-0 z-30 flex items-center gap-2 border-b border-borde/80 bg-panel/85 px-3 py-2.5 shadow-[0_1px_0_rgb(16_24_40/0.02)] backdrop-blur-lg sm:gap-3 sm:px-6">
                   <button className="btn-secundario px-3 lg:hidden" onClick={() => setMenuMovil(true)} aria-label="Abrir menú">
                     <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
                       <path d="M4 6h16M4 12h16M4 18h16" />
@@ -234,7 +240,7 @@ export function Shell({ perfil, children }: { perfil: Perfil; children: ReactNod
                   <Campana perfil={perfil} />
                   <MenuUsuario perfil={perfil} />
                 </header>
-                <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-5 sm:px-6">{children}</main>
+                <main className="mx-auto w-full max-w-7xl flex-1 animate-entrar px-4 py-6 sm:px-8">{children}</main>
               </div>
             </div>
           </FichaProvider>

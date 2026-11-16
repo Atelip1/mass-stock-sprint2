@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAvisos } from "@/components/Avisos";
 import { CampoCodigo } from "@/components/CampoCodigo";
@@ -137,8 +138,11 @@ function FormularioProducto({
   onProveedorCreado: (p: Proveedor) => void;
 }) {
   const { avisar } = useAvisos();
+  const perfil = usePerfil();
   const [error, setError] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
+  // RF-11 (documento): tras registrar un producto se ofrece cargar sus existencias de arranque por Ingreso (con guía y lote).
+  const [recienCreado, setRecienCreado] = useState<{ id: string; nombre: string } | null>(null);
   const [nuevaCat, setNuevaCat] = useState<string | null>(null);
   const [parecidas, setParecidas] = useState<Categoria[]>([]);
   // RF-07: productos con nombre parecido; hay que confirmar antes de registrar.
@@ -223,16 +227,35 @@ function FormularioProducto({
       controla_vencimiento: form.controla_vencimiento,
     };
     const supabase = supabaseNavegador();
-    const { error: err } = form.id ? await supabase.from("productos").update(datos).eq("id", form.id) : await supabase.from("productos").insert(datos);
+    const { data: creado, error: err } = form.id
+      ? await supabase.from("productos").update(datos).eq("id", form.id).select("id").maybeSingle()
+      : await supabase.from("productos").insert(datos).select("id").single();
     setGuardando(false);
     if (err) return setError(mensajeError(err));
     avisar(form.id ? `«${datos.nombre}» actualizado.` : `«${datos.nombre}» registrado en el catálogo.`);
+    setRecienCreado(!form.id && creado?.id ? { id: creado.id as string, nombre: datos.nombre } : null);
     setForm(VACIO);
     onGuardado();
   }
 
   return (
     <form onSubmit={guardar} className="panel h-fit p-4 sm:p-5" noValidate>
+      {recienCreado && (
+        <div className="mb-4 rounded-lg border border-ok/30 bg-ok-fondo p-3 text-sm">
+          <p className="font-semibold text-ok">«{recienCreado.nombre}» ya está en el catálogo con stock 0.</p>
+          <p className="mt-0.5 text-xs text-suave">Las existencias de arranque entran por un ingreso, con su guía, lote y vencimiento.</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {perfil.rol === "administrador" && (
+              <Link href={`/ingreso?producto=${recienCreado.id}`} className="btn-principal min-h-9 px-3">
+                Registrar stock inicial
+              </Link>
+            )}
+            <button type="button" className="btn-secundario min-h-9 px-3" onClick={() => setRecienCreado(null)}>
+              Cerrar
+            </button>
+          </div>
+        </div>
+      )}
       <h2 className="text-base font-bold">{form.id ? "Editar producto" : "Nuevo producto"}</h2>
 
       <label className="etiqueta mt-4" htmlFor="nombre">
