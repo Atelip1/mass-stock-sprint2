@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
@@ -22,7 +23,18 @@ export function usePerfil() {
 }
 
 const INACTIVIDAD_MS = 30 * 60_000; // RNF-12
+// RF-03 (documento): con «Recordarme» la sesión dura la jornada de trabajo y solo se cierra a mano (o tras 12 h sin uso).
+const JORNADA_MS = 12 * 60 * 60_000;
 const CLAVE_ACTIVIDAD = "mass-stock:ultima-actividad";
+const CLAVE_MANTENER = "mass-stock:mantener-sesion";
+
+function limiteInactividad() {
+  try {
+    return localStorage.getItem(CLAVE_MANTENER) === "1" ? JORNADA_MS : INACTIVIDAD_MS;
+  } catch {
+    return INACTIVIDAD_MS;
+  }
+}
 
 async function cerrarSesion(motivo?: string) {
   await fetch("/api/auth/logout", { method: "POST" }).catch(() => {});
@@ -44,7 +56,7 @@ function useCierrePorInactividad() {
         localStorage.setItem(CLAVE_ACTIVIDAD, String(Date.now()));
       } catch {}
     };
-    if (Date.now() - leer() > INACTIVIDAD_MS) {
+    if (Date.now() - leer() > limiteInactividad()) {
       cerrarSesion("inactividad");
       return;
     }
@@ -59,7 +71,7 @@ function useCierrePorInactividad() {
     const eventos = ["pointerdown", "keydown", "scroll", "touchstart"] as const;
     eventos.forEach((e) => window.addEventListener(e, actividad, { passive: true }));
     const revisar = setInterval(() => {
-      if (Date.now() - leer() > INACTIVIDAD_MS) cerrarSesion("inactividad");
+      if (Date.now() - leer() > limiteInactividad()) cerrarSesion("inactividad");
     }, 30_000);
     return () => {
       eventos.forEach((e) => window.removeEventListener(e, actividad));
@@ -89,7 +101,10 @@ function Marca() {
         <span className="block text-lg font-extrabold tracking-tight text-white">
           Mass <span className="text-amarillo">Stock</span>
         </span>
-        <span className="block text-[11px] text-white/65">Tienda Bolognesi · Chincha</span>
+        <span className="mt-0.5 flex items-center gap-1.5 text-[11px] text-white/70">
+          <Image src="/mass-logo.png" alt="Mass" width={16} height={16} className="size-4 rounded-[4px]" />
+          Bolognesi · Chincha
+        </span>
       </span>
     </div>
   );

@@ -9,7 +9,7 @@ import { Icono, type NombreIcono } from "@/components/Iconos";
 import { usePerfil } from "@/components/Shell";
 import { Cargando, duracion, Etiqueta, EtiquetaNivel, EtiquetaVence, MensajeError, Vacio } from "@/components/ui";
 import { supabaseNavegador } from "@/lib/supabase/client";
-import { hora, mensajeError } from "@/lib/formato";
+import { fechaHora, hora, mensajeError } from "@/lib/formato";
 import { useAhora } from "@/lib/useAhora";
 import { NADA, useDatos } from "@/lib/datos";
 import { NOMBRE_ROL, type AlertaActiva, type LineaHistorial } from "@/lib/tipos";
@@ -222,7 +222,13 @@ function InicioGestion() {
                     </span>
                   </button>
                   <EtiquetaNivel nivel={a.nivel} />
-                  <span className="w-14 text-right text-xs text-suave">{duracion(a.horas)}</span>
+                  {/* RF-09 (documento): fecha y hora de la alerta y cuánto lleva sin atenderse. */}
+                  <span className="shrink-0 text-right text-xs leading-tight whitespace-nowrap text-suave" title={`Detectada el ${fechaHora(a.detectada_en)}`}>
+                    <span className="block font-semibold text-texto">
+                      {new Date(a.detectada_en).toLocaleString("es-PE", { timeZone: "America/Lima", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false })}
+                    </span>
+                    hace {duracion(a.horas)}
+                  </span>
                 </li>
               ))}
             </ul>

@@ -115,7 +115,7 @@ export default function Indicadores() {
               ))}
             </div>
           ) : (
-            <button key={t} className={`panel p-4 text-left transition hover:border-azul ${sel === t ? "border-azul ring-1 ring-azul" : ""}`} onClick={() => setSel(t)} aria-pressed={sel === t}>
+            <button key={t} className={`panel flex flex-col p-4 text-left transition hover:border-azul ${sel === t ? "border-azul ring-1 ring-azul" : ""}`} onClick={() => setSel(t)} aria-pressed={sel === t}>
               <h2 className="text-sm font-bold">{IND[t].nombre}</h2>
               <p className="text-xs text-suave">{IND[t].mide}</p>
               <Valor clave={t} actual={actual[t]} base={datos.lineas_base[t]} />

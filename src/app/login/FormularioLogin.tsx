@@ -52,8 +52,14 @@ export function FormularioLogin() {
       }
       try {
         localStorage.setItem("mass-stock:ultima-actividad", String(Date.now()));
-        if (recordar) localStorage.setItem(CLAVE_CORREO, correo.trim().toLowerCase());
-        else localStorage.removeItem(CLAVE_CORREO);
+        // RF-03 (documento): con «Recordarme» la sesión se mantiene durante la jornada (ver Shell); sin marcar, se cierra a los 30 min sin uso.
+        if (recordar) {
+          localStorage.setItem(CLAVE_CORREO, correo.trim().toLowerCase());
+          localStorage.setItem("mass-stock:mantener-sesion", "1");
+        } else {
+          localStorage.removeItem(CLAVE_CORREO);
+          localStorage.removeItem("mass-stock:mantener-sesion");
+        }
       } catch {}
       window.location.href = "/";
     } catch {
@@ -126,31 +132,12 @@ export function FormularioLogin() {
       <div className="mt-4 flex items-center justify-between gap-3 text-sm">
         <label className="flex cursor-pointer items-center gap-2 select-none">
           <input type="checkbox" className="size-4.5 cursor-pointer rounded accent-marca" checked={recordar} onChange={(e) => setRecordar(e.target.checked)} />
-          Recordarme
+          <span title="Recuerda tu correo y mantiene la sesión abierta durante la jornada en este equipo">Recordarme</span>
         </label>
-        <button type="button" className="enlace text-sm" onClick={() => setAyuda((a) => !a)} aria-expanded={ayuda}>
+        <button type="button" className="enlace text-sm" onClick={() => setAyuda((a) => !a)} aria-pressed={ayuda}>
           ¿Olvidaste tu contraseña?
         </button>
       </div>
-
-      {ayuda && (
-        <p className="mt-3 animate-entrar rounded-xl bg-azul-claro/60 px-3.5 py-2.5 text-xs text-texto">
-          Pide al{" "}
-          <span
-            role="button"
-            tabIndex={-1}
-            className="cursor-default select-text"
-            onClick={() => {
-              setCorreo("admin@mass.pe");
-              setPassword("AdminMass2026!");
-              setError(null);
-            }}
-          >
-            administrador
-          </span>{" "}
-          que la restablezca; recibirás una contraseña temporal en tu correo.
-        </p>
-      )}
 
       <button className="btn-principal mt-6 h-13 w-full rounded-xl text-base" disabled={enviando || !correo || !password}>
         {enviando ? (
@@ -161,6 +148,24 @@ export function FormularioLogin() {
           </>
         )}
       </button>
+
+      {/* Texto de ayuda siempre visible bajo «Ingresar» (al pulsar «administrador» se rellenan los campos de demostración). */}
+      <p className={`mt-4 rounded-xl px-3.5 py-2.5 text-xs text-suave transition ${ayuda ? "bg-azul-claro/70 text-texto" : ""}`}>
+        ¿Olvidaste tu contraseña? Pide al{" "}
+        <span
+          role="button"
+          tabIndex={-1}
+          className="cursor-default select-text"
+          onClick={() => {
+            setCorreo("admin@mass.pe");
+            setPassword("AdminMass2026!");
+            setError(null);
+          }}
+        >
+          administrador
+        </span>{" "}
+        que la restablezca; recibirás una contraseña temporal.
+      </p>
     </form>
   );
 }

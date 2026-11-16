@@ -1,3 +1,4 @@
+import Image from "next/image";
 import type { ReactNode } from "react";
 import { Icono, LogoMassStock, type NombreIcono } from "./Iconos";
 
@@ -27,9 +28,12 @@ export function PantallaAcceso({ children }: { children: ReactNode }) {
         </div>
 
         <div className="relative z-10 mt-10 max-w-xl lg:mt-16">
-          <span className="inline-flex items-center gap-2 rounded-full border border-white/25 bg-white/10 px-3.5 py-1.5 text-sm backdrop-blur">
-            <Icono nombre="tienda" className="size-4 text-amarillo" />
-            Para tiendas <b>MASS</b>
+          <span className="inline-flex items-center gap-3 rounded-2xl border border-white/25 bg-white/10 py-1.5 pr-4 pl-1.5 text-sm backdrop-blur">
+            <Image src="/mass-logo.png" alt="Mass" width={44} height={44} className="size-11 rounded-xl shadow-md" priority />
+            <span className="leading-tight">
+              <span className="block text-[11px] text-white/70">Sistema para</span>
+              <b className="text-base">tiendas Mass</b>
+            </span>
           </span>
           <h1 className="mt-6 text-4xl leading-[1.08] font-extrabold sm:text-5xl">
             Optimiza tu tienda, controla tu{" "}
@@ -73,7 +77,8 @@ export function PantallaAcceso({ children }: { children: ReactNode }) {
           </div>
           <p className="mt-5 flex items-center justify-center gap-2 rounded-2xl bg-white/60 px-4 py-3 text-center text-xs text-suave dark:bg-panel/60">
             <Icono nombre="escudo" className="size-5 shrink-0 text-azul" trazo={1.8} />
-            Uso exclusivo del personal autorizado de tiendas MASS.
+            Uso exclusivo del personal autorizado de tiendas
+            <Image src="/mass-logo.png" alt="Mass" width={22} height={22} className="size-[22px] rounded-md" />
           </p>
         </div>
       </section>

@@ -121,33 +121,42 @@ export default function Usuarios() {
         </div>
       )}
 
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,360px)_1fr]">
+      <div className="grid gap-4 2xl:grid-cols-[minmax(0,340px)_1fr]">
         <form onSubmit={guardar} className="panel h-fit p-4 sm:p-5" noValidate>
           <h2 className="text-base font-bold">{edit.id ? "Editar usuario" : "Nuevo usuario"}</h2>
-          <label className="etiqueta mt-4" htmlFor="u-nombre">
-            Nombre completo
-          </label>
-          <input id="u-nombre" className="campo" value={edit.nombre} onChange={(e) => setEdit({ ...edit, nombre: e.target.value })} />
-          <label className="etiqueta mt-4" htmlFor="u-correo">
-            Correo
-          </label>
-          <input
-            id="u-correo"
-            className="campo"
-            type="email"
-            placeholder="nombre@mass.pe"
-            value={edit.correo}
-            disabled={!!edit.id}
-            onChange={(e) => setEdit({ ...edit, correo: e.target.value })}
-          />
-          <label className="etiqueta mt-4" htmlFor="u-rol">
-            Rol
-          </label>
-          <select id="u-rol" className="campo" value={edit.rol} onChange={(e) => setEdit({ ...edit, rol: e.target.value as Rol })}>
-            <option value="reponedor">Reponedor</option>
-            <option value="supervisor">Supervisor</option>
-            <option value="administrador">Administrador</option>
-          </select>
+          {/* En pantallas medianas el formulario va arriba en una fila; en muy anchas, al costado de la tabla. */}
+          <div className="grid gap-x-3 md:grid-cols-3 2xl:grid-cols-1">
+            <div>
+              <label className="etiqueta mt-4" htmlFor="u-nombre">
+                Nombre completo
+              </label>
+              <input id="u-nombre" className="campo" value={edit.nombre} onChange={(e) => setEdit({ ...edit, nombre: e.target.value })} />
+            </div>
+            <div>
+              <label className="etiqueta mt-4" htmlFor="u-correo">
+                Correo
+              </label>
+              <input
+                id="u-correo"
+                className="campo"
+                type="email"
+                placeholder="nombre@mass.pe"
+                value={edit.correo}
+                disabled={!!edit.id}
+                onChange={(e) => setEdit({ ...edit, correo: e.target.value })}
+              />
+            </div>
+            <div>
+              <label className="etiqueta mt-4" htmlFor="u-rol">
+                Rol
+              </label>
+              <select id="u-rol" className="campo" value={edit.rol} onChange={(e) => setEdit({ ...edit, rol: e.target.value as Rol })}>
+                <option value="reponedor">Reponedor</option>
+                <option value="supervisor">Supervisor</option>
+                <option value="administrador">Administrador</option>
+              </select>
+            </div>
+          </div>
           {!edit.id && (
             <p className="ayuda mt-2">
               Se enviará una clave temporal al correo registrado.
@@ -174,7 +183,7 @@ export default function Usuarios() {
             <Cargando />
           ) : (
             <div className="overflow-x-auto">
-              <table className="tabla min-w-[640px]">
+              <table className="tabla min-w-[860px]">
                 <thead>
                   <tr>
                     <th>Nombre</th>
@@ -213,11 +222,12 @@ export default function Usuarios() {
                             <Etiqueta tono="neutro">Desactivado</Etiqueta>
                           )}
                         </td>
-                        <td className="text-xs text-suave">{fechaHora(u.ultimo_acceso) || "Nunca"}</td>
+                        <td className="text-xs whitespace-nowrap text-suave">{fechaHora(u.ultimo_acceso) || "Nunca"}</td>
                         <td className="text-right">
-                          <div className="flex justify-end gap-1.5">
+                          {/* Tres columnas fijas: los botones quedan alineados en todas las filas, también en la tuya (sin «Desactivar»). */}
+                          <div className="ml-auto grid w-max grid-cols-[4.5rem_8.5rem_6.5rem] gap-1.5">
                             <button
-                              className="btn-secundario min-h-8 px-2.5 text-xs"
+                              className="btn-secundario min-h-8 px-2 text-xs whitespace-nowrap"
                               onClick={() => {
                                 setEdit({ id: u.id, nombre: u.nombre, correo: u.correo, rol: u.rol });
                                 window.scrollTo({ top: 0, behavior: "smooth" });
@@ -226,15 +236,19 @@ export default function Usuarios() {
                               Editar
                             </button>
                             <button
-                              className="btn-secundario min-h-8 px-2.5 text-xs"
+                              className="btn-secundario min-h-8 px-2 text-xs whitespace-nowrap"
                               title="Genera una clave temporal de 15 min y la envía a su correo"
                               onClick={() => accion(u, "restablecer")}
                             >
                               Restablecer clave
                             </button>
-                            {!esYo && (
+                            {esYo ? (
+                              <span className="grid min-h-8 place-items-center text-[11px] text-suave" title="No puedes desactivar tu propia cuenta">
+                                Tu cuenta
+                              </span>
+                            ) : (
                               <button
-                                className={`${u.activo ? "btn-peligro" : "btn-secundario"} min-h-8 px-2.5 text-xs`}
+                                className={`${u.activo ? "btn-peligro" : "btn-secundario"} min-h-8 px-2 text-xs whitespace-nowrap`}
                                 onClick={() => accion(u, u.activo ? "desactivar" : "activar")}
                               >
                                 {u.activo ? "Desactivar" : "Activar"}

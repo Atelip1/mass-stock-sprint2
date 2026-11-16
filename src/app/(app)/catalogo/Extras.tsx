@@ -224,7 +224,7 @@ export function Categorias({ esAdmin, productos, onCambio }: { esAdmin: boolean;
   const [conservar, setConservar] = useState("");
   const [absorber, setAbsorber] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const cats = q.datos ?? [];
+  const cats = useMemo(() => q.datos ?? [], [q.datos]);
   const filtradas = useMemo(() => cats.filter((c) => !busqueda.trim() || coincide(c.nombre, busqueda)), [cats, busqueda]);
   const paginas = Math.max(1, Math.ceil(filtradas.length / POR_PAGINA));
   const pag = Math.min(pagina, paginas - 1);
